@@ -2,6 +2,7 @@ heimdall
 ======
 Heimdall is a monitoring, logging, and statistics generating bot.
 Currently on version 1.1.
+
 [![Code Climate](https://codeclimate.com/github/PouncySilverkitten/heimdall/badges/gpa.svg)](https://codeclimate.com/github/PouncySilverkitten/heimdall)
 
 [![build status badge](https://travis-ci.org/PouncySilverkitten/heimdall.svg?branch=master)](https://travis-ci.org/PouncySilverkitten/heimdall) with [![Test Coverage](https://codeclimate.com/github/PouncySilverkitten/heimdall/badges/coverage.svg)](https://codeclimate.com/github/PouncySilverkitten/heimdall/coverage)
