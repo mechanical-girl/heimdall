@@ -1,10 +1,6 @@
 """
 Heimdall is a monitoring, logging, and statistics generating bot.
 Currently on version 1.1.
-[![Code Climate](https://codeclimate.com/github/PouncySilverkitten/heimdall/badges/gpa.svg)](https://codeclimate.com/github/PouncySilverkitten/heimdall)
-
-[![build status badge](https://travis-ci.org/PouncySilverkitten/heimdall.svg?branch=master)](https://travis-ci.org/PouncySilverkitten/heimdall) with [![Test Coverage](https://codeclimate.com/github/PouncySilverkitten/heimdall/badges/coverage.svg)](https://codeclimate.com/github/PouncySilverkitten/heimdall/coverage)
-
 
 Heimdall will eventually have the ability to spread across multiple rooms.
 The goal is that as well as being able to monitor euphoria.io and provide
@@ -25,6 +21,7 @@ from datetime import datetime
 import json
 import sqlite3
 import pprint
+import time
 
 
 class UpdateDone (Exception):
@@ -41,14 +38,16 @@ class KillError (Exception):
 # the database name, and a pointer to the connection and cursor
 def insertMessage(message, dbName, conn, c):
     """Inserts a new message into the database of messages"""
-    if not 'parent' in message:
-        message['parent'] = ''
     if 'data' in message:
+        if not 'parent' in message['data']:
+            message['data']['parent'] = ''
         data = (message['data']['content'], message['data']['id'], message['data']['parent'],
                 message['data']['sender']['id'], message['data']['sender']['name'], heimdall.normaliseNick(
                     message['data']['sender']['name']),
                 message['data']['time'])
     else:
+        if not 'parent' in message:
+            message['parent'] = ''
         data = (message['content'], message['id'], message['parent'],
                 message['sender']['id'], message['sender']['name'], heimdall.normaliseNick(
                     message['sender']['name']),
@@ -70,7 +69,7 @@ c = conn.cursor()
 
 # Create the table if it doesn't already exist
 try:
-    c.execute('''CREATE TABLE {} (
+    c.execute('''CREATE TABLE {}(
                     content text,
                     id text,
                     parent text,
@@ -118,6 +117,7 @@ while True:
             try:
                 c.executemany(
                     '''INSERT OR FAIL INTO {} VALUES(?, ?, ?, ?, ?, ?, ?)'''.format(room), data)
+                conn.commit()
             except sqlite3.IntegrityError:
                 raise UpdateDone
 
@@ -133,20 +133,23 @@ while True:
 
         # If it's just a single message, we can use the insertMessage function
         else:
-            insertMessage(message, room, conn, c)
-
+            try:
+                insertMessage(reply, room, conn, c)
+            except sqlite3.IntegrityError:
+                print("Failed: Message '{}' already exists in DB".format(
+                    reply['data']['content']))
     except UpdateDone:
         break
 
 conn.commit()
-conn.close
+conn.close()
 
-conn = sqlite3.connect('logs.db')
-c = conn.cursor()
 print('Ready')
 
 while True:
     try:
+        conn = sqlite3.connect('logs.db')
+        c = conn.cursor()
         while True:
             message = heimdall.parse()
             # If the message is worth storing, we'll store it
@@ -155,12 +158,32 @@ while True:
 
                 # If it's asking for stats... well, let's give them stats.
                 if message['data']['content'] == '!stats':
+
+                    # First off, we'll get a known-good version of the requester name
+                    normnick = heimdall.normaliseNick(
+                        message['data']['sender']['name'])
+
+                    # Query gets the number of messages sent
                     c.execute(
                         '''SELECT count(*) FROM {} WHERE normname is "{}"'''.format(
-                            room, heimdall.normaliseNick(message['data']['sender']['name'])))
-                    heimdall.send("You have sent {} messages under your current nick in the history of the room.".format(
-                        str(c.fetchone()[0])), message['data']['id'])
-    except KillError:
-        break
+                            room, normnick))
+                    count = c.fetchone()[0]
+
+                    # Query gets the earliest message sent
+                    c.execute(
+                        '''SELECT * FROM {} WHERE normname IS "{}" ORDER BY time ASC'''.format(room, normnick))
+                    earliest = c.fetchone()
+
+                    print(earliest)
+
+                    firstMessageSent = datetime.utcfromtimestamp(earliest[6]).strftime("%Y-%m-%d")
+                    currentTime = datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d")
+                    numberOfDays = (datetime.strptime(currentTime, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
+
+                    # Collate and send the lot.
+                    heimdall.send('You have sent {} messages under your current nick in the history of the room, beginning {} days ago on {} ("{}") and averaging {} messages per day.'.format(
+                        str(count), numberOfDays, firstMessageSent, earliest[0], int(count / numberOfDays)), message['data']['id'])
+    except sqlite3.IntegrityError:
+        conn.close()
 
 conn.close()
