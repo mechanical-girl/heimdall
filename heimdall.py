@@ -157,11 +157,14 @@ while True:
                 insertMessage(message, room, conn, c)
 
                 # If it's asking for stats... well, let's give them stats.
-                if message['data']['content'] == '!stats':
+                if message['data']['content'][0:6] == '!stats':
+                    if '@' in message['data']['content']:
+                        statsOf = message['data']['content'].split('@')[1].split(' ')[0]
+                    else:
+                        statsOf = message['data']['sender']['name']
 
                     # First off, we'll get a known-good version of the requester name
-                    normnick = heimdall.normaliseNick(
-                        message['data']['sender']['name'])
+                    normnick = heimdall.normaliseNick(statsOf)
 
                     # Query gets the number of messages sent
                     c.execute(
@@ -174,15 +177,15 @@ while True:
                         '''SELECT * FROM {} WHERE normname IS "{}" ORDER BY time ASC'''.format(room, normnick))
                     earliest = c.fetchone()
 
-                    print(earliest)
-
+                    # Calculate when the first message was sent and the averate messages per day.
                     firstMessageSent = datetime.utcfromtimestamp(earliest[6]).strftime("%Y-%m-%d")
                     currentTime = datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d")
                     numberOfDays = (datetime.strptime(currentTime, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
 
                     # Collate and send the lot.
-                    heimdall.send('You have sent {} messages under your current nick in the history of the room, beginning {} days ago on {} ("{}") and averaging {} messages per day.'.format(
-                        str(count), numberOfDays, firstMessageSent, earliest[0], int(count / numberOfDays)), message['data']['id'])
+                    heimdall.send('User {} has sent {} messages under that current nick in the history of the room, beginning {} days ago on {} ("{}") and averaging {} messages per day.'.format(
+                        statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], int(count / numberOfDays)), message['data']['id'])
+
     except sqlite3.IntegrityError:
         conn.close()
 
