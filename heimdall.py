@@ -24,6 +24,12 @@ import pprint
 import time
 import signal
 import argparse
+import re
+import urllib.request
+
+#Used for getting page titles
+url_regex = re.compile(r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))""")
+
 
 class UpdateDone (Exception):
     """Exception meaning that logs are up to date"""
@@ -69,6 +75,11 @@ def updateCount(name, c):
         c.execute('''SELECT * FROM {}posters WHERE name is ?'''.format(room), (name,))
         newCount = c.fetchone()[1] + 1
         c.execute('''UPDATE {}posters SET count = ? WHERE name = ?'''.format(room), (newCount, name,))
+
+#Catches URLs
+def getUrls(m):
+    global urls
+    urls.append(m.group(0))
 
 # Handles SIGINTs
 def onSIGINT(signum, frame):
@@ -201,6 +212,20 @@ while True:
             if message['type'] == 'send-event':
                 insertMessage(message, room, conn, c)
                 updateCount(message['data']['sender']['name'], c)
+
+                #Check if the message has URLs
+                urls = []
+                titles = []
+                url_regex.sub(getUrls, message['data']['content'])
+                if len(urls) > 0:
+                    response = ""
+                    for match in urls:
+                        try:
+                            url = 'http://' + match if not '://' in match else match
+                            title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
+                            response += "Title: {} \n".format(title)
+                        except: pass
+                    heimdall.send(response, message['data']['id'])
 
                 # If it's asking for stats... well, let's give them stats.
                 if message['data']['content'][0:6] == '!stats':
