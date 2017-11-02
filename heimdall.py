@@ -22,7 +22,8 @@ import json
 import sqlite3
 import pprint
 import time
-
+import signal
+import argparse
 
 class UpdateDone (Exception):
     """Exception meaning that logs are up to date"""
@@ -52,17 +53,41 @@ def insertMessage(message, dbName, conn, c):
                 message['sender']['id'], message['sender']['name'], heimdall.normaliseNick(
                     message['sender']['name']),
                 message['time'])
+    while True:
+        try:
+            c.execute(
+                '''INSERT OR FAIL INTO {} VALUES(?, ?, ?, ?, ?, ?, ?)'''.format(dbName), data)
+            conn.commit()
+            break
+        except sqlite3.OperationalError:
+            time.sleep(5)
 
-    c.execute(
-        '''INSERT OR FAIL INTO {} VALUES(?, ?, ?, ?, ?, ?, ?)'''.format(dbName), data)
-    conn.commit()
+def updateCount(name, c):
+    try:
+        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?)'''.format(room), (name, 1,))
+    except:
+        c.execute('''SELECT * FROM {}posters WHERE name is ?'''.format(room), (name,))
+        newCount = c.fetchone()[1] + 1
+        c.execute('''UPDATE {}posters SET count = ? WHERE name = ?'''.format(room), (newCount, name,))
 
+# Handles SIGINTs
+def onSIGINT(signum, frame):
+    global conn
+    conn.close()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, onSIGINT)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("room")
+parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
+args = parser.parse_args()
 
 # Get logs
-room = 'xkcd'
+room = args.room
 
 heimdall = karelia.newBot('Heimdall', room)
-heimdall.connect(False)
+heimdall.connect(True)
 
 conn = sqlite3.connect('logs.db')
 c = conn.cursor()
@@ -78,14 +103,23 @@ try:
                     normname text,
                     time real
                  )'''.format(room))
-    conn.commit()
     c.execute('''CREATE UNIQUE INDEX messageID ON {}(id)'''.format(room))
+except:
+    pass
+try:
+    c.execute('''CREATE TABLE {}posters(
+                    name text,
+                    count real
+                )'''.format(room))
+    c.execute('''CREATE UNIQUE INDEX name ON {}posters(name)'''.format(room))
     conn.commit()
 except:
     pass
 
 # Start pulling logs
 heimdall.send({'type': 'log', 'data': {'n': 1000}})
+names = set()
+
 while True:
     try:
         while True:
@@ -110,14 +144,14 @@ while True:
                              message['sender']['id'], message['sender']['name'], heimdall.normaliseNick(
                             message['sender']['name']),
                     message['time']))
-
+                names.add(message['sender']['name'])
             # Attempts to insert all the messages in bulk. If it fails, it will
             # break out of the loop and we will assume that the logs are now
             # up to date.
             try:
                 c.executemany(
                     '''INSERT OR FAIL INTO {} VALUES(?, ?, ?, ?, ?, ?, ?)'''.format(room), data)
-                conn.commit()
+
             except sqlite3.IntegrityError:
                 raise UpdateDone
 
@@ -141,10 +175,21 @@ while True:
     except UpdateDone:
         break
 
+for name in names:
+    c.execute('''SELECT COUNT(*) FROM {} WHERE sendername IS ?'''.format(room), (name,))
+    count = c.fetchone()[0]
+    try:
+        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?)'''.format(room), (name, count,))
+    except:
+        c.execute('''UPDATE {}posters SET count = ? WHERE name = ?'''.format(room), (count, name,))
+
+
 conn.commit()
 conn.close()
 
 print('Ready')
+heimdall.disconnect()
+heimdall.connect(args.stealth)
 
 while True:
     try:
@@ -155,6 +200,7 @@ while True:
             # If the message is worth storing, we'll store it
             if message['type'] == 'send-event':
                 insertMessage(message, room, conn, c)
+                updateCount(message['data']['sender']['name'], c)
 
                 # If it's asking for stats... well, let's give them stats.
                 if message['data']['content'][0:6] == '!stats':
@@ -167,26 +213,59 @@ while True:
                     normnick = heimdall.normaliseNick(statsOf)
 
                     # Query gets the number of messages sent
-                    c.execute(
-                        '''SELECT count(*) FROM {} WHERE normname is "{}"'''.format(
-                            room, normnick))
+                    c.execute('''SELECT count(*) FROM {} WHERE normname is ?'''.format(room), (normnick,))
                     count = c.fetchone()[0]
 
+                    if count == 0:
+                        heimdall.send('User @{} not found.'.format(statsOf), message['data']['id'])
+                        continue
+
                     # Query gets the earliest message sent
-                    c.execute(
-                        '''SELECT * FROM {} WHERE normname IS "{}" ORDER BY time ASC'''.format(room, normnick))
+                    c.execute('''SELECT * FROM {} WHERE normname IS ? ORDER BY time ASC'''.format(room), (normnick,))
                     earliest = c.fetchone()
 
-                    # Calculate when the first message was sent and the averate messages per day.
+                    # Query gets the most recent message sent
+                    c.execute('''SELECT * FROM {} WHERE normname IS ? ORDER BY time DESC'''.format(room), (normnick,))
+                    latest = c.fetchone()
+
+                    # Calculate when the first message was sen, when the most recent message was sent, and the averate messages per day.
                     firstMessageSent = datetime.utcfromtimestamp(earliest[6]).strftime("%Y-%m-%d")
-                    currentTime = datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d")
-                    numberOfDays = (datetime.strptime(currentTime, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
+                    lastMessageSent = datetime.utcfromtimestamp(latest[6]).strftime("%Y-%m-%d")
+                    numberOfDays = (datetime.strptime(lastMessageSent, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
+                    if lastMessageSent == datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d"): lastMessageSent = "today"
+                    numberOfDays = numberOfDays if numberOfDays > 0 else 1
 
                     # Collate and send the lot.
-                    heimdall.send('User {} has sent {} messages under that current nick in the history of the room, beginning {} days ago on {} ("{}") and averaging {} messages per day.'.format(
-                        statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], int(count / numberOfDays)), message['data']['id'])
+                    heimdall.send('User {} has sent {} messages under that nick in the history of the room, between {} days ago on {} ("{}") and {}, averaging {} messages per day.'.format(
+                        statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays)), message['data']['id'])
+
+                # If it's roomstats they want, well, let's get cracking!
+                elif message['data']['content'] == '!roomstats':
+                    # Calculate all posts ever
+                    c.execute('''SELECT count(*) FROM {}'''.format(room))
+                    count = c.fetchone()[0]
+
+                    # Calculate top ten posters of all time
+                    c.execute('''SELECT * FROM {}posters ORDER BY count DESC LIMIT 10'''.format(room))
+                    results = c.fetchall()
+                    topTen = ""
+                    for i, result in enumerate(results):
+                        topTen += "{:2d}) {:<7} - {}\n".format(i+1, int(result[1]), result[0])
+
+                    # Get requester's position.
+                    c.execute('''SELECT * FROM {}posters ORDER BY count DESC'''.format(room))
+                    results = c.fetchall()
+                    for i, result in enumerate(results):
+                        if result[0] == message['data']['sender']['name']:
+                            position = i + 1
+                            break
+
+                    heimdall.send("There have been {} posts in &{}.\n\nThe top ten posters are:\n{}\nYou are at position {} of {}.".format(count, room, topTen, position, len(results)), message['data']['id'])
 
     except sqlite3.IntegrityError:
+        conn.close()
+    except Exception:
+        heimdall.log(Exception)
         conn.close()
 
 conn.close()
