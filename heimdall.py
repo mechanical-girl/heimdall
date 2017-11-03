@@ -55,14 +55,13 @@ def insertMessage(message, dbName, conn, c):
     else:
         if not 'parent' in message:
             message['parent'] = ''
-        data = (message['content'], message['id'], message['parent'],
+        data = (message['content'].replace('&', '{ampersand}'), message['id'], message['parent'],
                 message['sender']['id'], message['sender']['name'], heimdall.normaliseNick(
                     message['sender']['name']),
                 message['time'])
     while True:
         try:
-            c.execute(
-                '''INSERT OR FAIL INTO {} VALUES(?, ?, ?, ?, ?, ?, ?)'''.format(dbName), data)
+            c.execute('''INSERT OR FAIL INTO {} VALUES(?, ?, ?, ?, ?, ?, ?)'''.format(dbName), data)
             conn.commit()
             break
         except sqlite3.OperationalError:
@@ -75,6 +74,7 @@ def updateCount(name, c):
         c.execute('''SELECT * FROM {}posters WHERE name is ?'''.format(room), (name,))
         newCount = c.fetchone()[1] + 1
         c.execute('''UPDATE {}posters SET count = ? WHERE name = ?'''.format(room), (newCount, name,))
+    conn.commit()
 
 #Catches URLs
 def getUrls(m):
@@ -115,8 +115,7 @@ try:
                     time real
                  )'''.format(room))
     c.execute('''CREATE UNIQUE INDEX messageID ON {}(id)'''.format(room))
-except:
-    pass
+except: pass
 try:
     c.execute('''CREATE TABLE {}posters(
                     name text,
@@ -124,8 +123,12 @@ try:
                 )'''.format(room))
     c.execute('''CREATE UNIQUE INDEX name ON {}posters(name)'''.format(room))
     conn.commit()
-except:
-    pass
+except: pass
+try:
+    c.execute('''CREATE TABLE rooms(name text, password integer)''')
+    c.execute('''CREATE UNIQUE INDEX name ON rooms(name)''')
+    conn.commit()
+except: pass
 
 # Start pulling logs
 heimdall.send({'type': 'log', 'data': {'n': 1000}})
@@ -207,6 +210,7 @@ while True:
         conn = sqlite3.connect('logs.db')
         c = conn.cursor()
         while True:
+            conn.commit()
             message = heimdall.parse()
             # If the message is worth storing, we'll store it
             if message['type'] == 'send-event':
@@ -226,6 +230,23 @@ while True:
                             response += "Title: {} \n".format(title)
                         except: pass
                     heimdall.send(response, message['data']['id'])
+
+                # Check if the message mentions a room
+                if '&' in message['data']['content']:
+                    possibleRooms = [room[1:] for room in message['data']['content'].split(' ') if room[0] == '&']
+                    for possibleRoom in possibleRooms:
+                        spider = karelia.newBot('', possibleRoom)
+                        try:
+                            spider.connect(True)
+                            event = spider.parse()['type']
+                            if event == 'bounce-event':
+                                c.execute('''INSERT OR FAIL INTO rooms VALUES(?,?)''', (possibleRoom, 1,))
+                                conn.commit()
+                            else:
+                                c.execute('''INSERT OR FAIL INTO rooms VALUES(?,?)''', (possibleRoom, 0,))
+                                conn.commit()
+                            spider.disconnect()
+                        except: pass
 
                 # If it's asking for stats... well, let's give them stats.
                 if message['data']['content'][0:6] == '!stats':
@@ -265,7 +286,7 @@ while True:
                         statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays)), message['data']['id'])
 
                 # If it's roomstats they want, well, let's get cracking!
-                elif message['data']['content'] == '!roomstats':
+                if message['data']['content'] == '!roomstats':
                     # Calculate all posts ever
                     c.execute('''SELECT count(*) FROM {}'''.format(room))
                     count = c.fetchone()[0]
@@ -290,7 +311,7 @@ while True:
     except sqlite3.IntegrityError:
         conn.close()
     except Exception:
-        heimdall.log(Exception)
+        heimdall.log()
         conn.close()
 
 conn.close()
