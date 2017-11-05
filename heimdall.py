@@ -26,6 +26,8 @@ import signal
 import argparse
 import re
 import urllib.request
+import html
+import codecs
 
 #Used for getting page titles
 url_regex = re.compile(r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))""")
@@ -227,7 +229,7 @@ while True:
                         try:
                             url = 'http://' + match if not '://' in match else match
                             title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
-                            response += "Title: {} \n".format(title)
+                            response += "Title: {} \n".format(html.unescape(codecs.decode(title, 'unicode_escape')).strip())
                         except: pass
                     heimdall.send(response, message['data']['id'])
 
@@ -274,19 +276,27 @@ while True:
                     c.execute('''SELECT * FROM {} WHERE normname IS ? ORDER BY time DESC'''.format(room), (normnick,))
                     latest = c.fetchone()
 
-                    # Calculate when the first message was sen, when the most recent message was sent, and the averate messages per day.
+                    # Calculate when the first message was sent, when the most recent message was sent, and the averate messages per day.
                     firstMessageSent = datetime.utcfromtimestamp(earliest[6]).strftime("%Y-%m-%d")
                     lastMessageSent = datetime.utcfromtimestamp(latest[6]).strftime("%Y-%m-%d")
                     numberOfDays = (datetime.strptime(lastMessageSent, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
                     if lastMessageSent == datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d"): lastMessageSent = "today"
                     numberOfDays = numberOfDays if numberOfDays > 0 else 1
 
+                    # Get requester's position.
+                    c.execute('''SELECT * FROM {}posters ORDER BY count DESC'''.format(room))
+                    results = c.fetchall()
+                    for i, result in enumerate(results):
+                        if heimdall.normaliseNick(result[0]) == normnick:
+                            position = i + 1
+                            break
+
                     # Collate and send the lot.
-                    heimdall.send('User {} has sent {} messages under that nick in the history of the room, between {} days ago on {} ("{}") and {}, averaging {} messages per day.'.format(
-                        statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays)), message['data']['id'])
+                    heimdall.send('User {} has sent {} messages under that nick in the history of the room, between {} days ago on {} ("{}") and {}, averaging {} messages per day. They are ranked {} of {}.'.format(
+                        statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), position, len(results)), message['data']['id'])
 
                 # If it's roomstats they want, well, let's get cracking!
-                if message['data']['content'] == '!roomstats':
+                elif message['data']['content'] == '!roomstats':
                     # Calculate all posts ever
                     c.execute('''SELECT count(*) FROM {}'''.format(room))
                     count = c.fetchone()[0]
@@ -298,15 +308,7 @@ while True:
                     for i, result in enumerate(results):
                         topTen += "{:2d}) {:<7} - {}\n".format(i+1, int(result[1]), result[0])
 
-                    # Get requester's position.
-                    c.execute('''SELECT * FROM {}posters ORDER BY count DESC'''.format(room))
-                    results = c.fetchall()
-                    for i, result in enumerate(results):
-                        if result[0] == message['data']['sender']['name']:
-                            position = i + 1
-                            break
-
-                    heimdall.send("There have been {} posts in &{}.\n\nThe top ten posters are:\n{}\nYou are at position {} of {}.".format(count, room, topTen, position, len(results)), message['data']['id'])
+                    heimdall.send("There have been {} posts in &{}.\n\nThe top ten posters are:\n{}".format(count, room, topTen), message['data']['id'])
 
     except sqlite3.IntegrityError:
         conn.close()
