@@ -224,6 +224,8 @@ while True:
                 urls = []
                 titles = []
                 url_regex.sub(getUrls, message['data']['content'])
+                for url in urls:
+                    if "imgur.com/" in url: urls.remove(url)
                 if len(urls) > 0:
                     response = ""
                     for match in urls:
