@@ -17,7 +17,8 @@ import sys
 sys.path.append('/home/struan/python/karelia/')
 
 import karelia
-from datetime import datetime
+from datetime import datetime, timedelta
+from pushover import Pushover
 import json
 import sqlite3
 import pprint
@@ -28,6 +29,7 @@ import re
 import urllib.request
 import html
 import codecs
+
 
 #Used for getting page titles
 url_regex = re.compile(r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))""")
@@ -95,6 +97,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("room")
 parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
 args = parser.parse_args()
+po = Pushover("as2xsn2dmwcqytzhb7xcf4hrzwt84e")
+po.user = "ui5pi24yho8aj7pzpqnp6cjgzoij7q"
 
 # Get logs
 room = args.room
@@ -183,11 +187,8 @@ while True:
 
         # If it's just a single message, we can use the insertMessage function
         else:
-            try:
-                insertMessage(reply, room, conn, c)
-            except sqlite3.IntegrityError:
-                print("Failed: Message '{}' already exists in DB".format(
-                    reply['data']['content']))
+            try: insertMessage(reply, room, conn, c)
+            except sqlite3.IntegrityError: pass
     except UpdateDone:
         break
 
@@ -205,10 +206,10 @@ conn.close()
 
 print('Ready')
 heimdall.disconnect()
-heimdall.connect(args.stealth)
 
 while True:
     try:
+        heimdall.connect(args.stealth)
         conn = sqlite3.connect('logs.db')
         c = conn.cursor()
         while True:
@@ -229,7 +230,9 @@ while True:
                         try:
                             url = 'http://' + match if not '://' in match else match
                             title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
-                            response += "Title: {} \n".format(html.unescape(codecs.decode(title, 'unicode_escape')).strip())
+                            title = html.unescape(codecs.decode(title, 'unicode_escape')).strip()
+                            clearTitle = title if len(title) <= 75 else '{}...'.format(title[0:72].strip())
+                            response += "Title: {} \n".format(clearTitle)
                         except: pass
                     heimdall.send(response, message['data']['id'])
 
@@ -249,6 +252,9 @@ while True:
                                 conn.commit()
                             spider.disconnect()
                         except: pass
+                
+                if message['data']['sender']['name'] == "Stormageddon" :
+                    po.send(po.msg("Stormageddon Sent A Message").set("title","Stormy in &{}".format(room)))
 
                 # If it's asking for stats... well, let's give them stats.
                 if message['data']['content'][0:6] == '!stats':
@@ -308,12 +314,23 @@ while True:
                     for i, result in enumerate(results):
                         topTen += "{:2d}) {:<7} - {}\n".format(i+1, int(result[1]), result[0])
 
-                    heimdall.send("There have been {} posts in &{}.\n\nThe top ten posters are:\n{}".format(count, room, topTen), message['data']['id'])
+                    # Get activity over the last 28 days
+                    lowerBound = datetime.now() + timedelta(-28)
+                    lowerBound = time.mktime(lowerBound.timetuple())
+                    c.execute('''SELECT count(*) FROM {} WHERE time > ?'''.format(room), (lowerBound,))
+                    last28Days = c.fetchone()
+                    perDayLastFourWeeks = int(last28Days[0]/28)
+
+                    heimdall.send("There have been {} posts in &{}, averaging {} per day over the last 28 days.\n\nThe top ten posters are:\n{}".format(count, room, perDayLastFourWeeks, topTen), message['data']['id'])
 
     except sqlite3.IntegrityError:
         conn.close()
+        heimdall.log()
     except Exception:
         heimdall.log()
         conn.close()
+        heimdall.disconnect()
+    finally:
+        time.sleep(5)
 
 conn.close()
