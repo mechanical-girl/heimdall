@@ -50454,3 +50454,11 @@ Traceback (most recent call last):
 BrokenPipeError: [Errno 32] Broken pipe
 
 
+--------------------
+2018-02-11 14:55:02 - Exception on message: {'id': '037xgn829lxxc', 'parent': '037xcsgrx3vnk', 'time': 1518360901, 'sender': {'id': 'account:01ha19ib9296o', 'name': 'Pouncy Silverkitten', 'server_id': 'heim.1', 'server_era': '03769mpwsey2o', 'session_id': '746564632d686e72744d593d-3f9069df49b5bb8e', 'is_manager': True}, 'content': '!stats', 'edited': None, 'deleted': None}:
+Traceback (most recent call last):
+  File "heimdall.py", line 319, in <module>
+    statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0], busiestDay[1], position, len(results)), message['data']['id'])
+NameError: name 'position' is not defined
+
+

@@ -2109,3 +2109,43 @@ Traceback (most recent call last):
 websocket._exceptions.WebSocketBadStatusException: Handshake status 503
 
 
+--------------------
+2018-02-11 14:49:14 - Exception on message: {'id': '037xg4miievb4', 'parent': '037xdu8zyl2ww', 'time': 1518360554, 'sender': {'id': 'account:01ha19ib9296o', 'name': 'Pouncy Silverkitten', 'server_id': 'heim.1', 'server_era': '03769mpwsey2o', 'session_id': '746564632d686e72744d593d-3f9069df49b5bbe6'}, 'content': '!stats', 'edited': None, 'deleted': None}:
+Traceback (most recent call last):
+  File "heimdall.py", line 294, in <module>
+    day = "{}-{}-{}".format(sentDay.year(), sentDay.month(), sentDay.day())
+TypeError: 'int' object is not callable
+
+
+--------------------
+2018-02-11 14:51:42 - Exception on message: {'id': '037xgcijk9qtc', 'parent': '037xdu8zyl2ww', 'time': 1518360701, 'sender': {'id': 'account:01ha19ib9296o', 'name': 'Pouncy Silverkitten', 'server_id': 'heim.1', 'server_era': '03769mpwsey2o', 'session_id': '746564632d686e72744d593d-3f9069df49b5bbe6'}, 'content': '!stats', 'edited': None, 'deleted': None}:
+Traceback (most recent call last):
+  File "heimdall.py", line 319, in <module>
+    statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0], busiestDay[1], position, len(results)), message['data']['id'])
+NameError: name 'position' is not defined
+
+
+--------------------
+2018-02-11 14:53:31 - Exception on message: {'id': '037xgidwlytq8', 'parent': '037xdu8zyl2ww', 'time': 1518360811, 'sender': {'id': 'account:01ha19ib9296o', 'name': 'Pouncy Silverkitten', 'server_id': 'heim.1', 'server_era': '03769mpwsey2o', 'session_id': '746564632d686e72744d593d-3f9069df49b5bbf1'}, 'content': '!stats', 'edited': None, 'deleted': None}:
+Traceback (most recent call last):
+  File "heimdall.py", line 294, in <module>
+    day = "{}-{}-{}".format(sentDay.year, sentDay.month, sentDay.da)
+AttributeError: 'datetime.datetime' object has no attribute 'da'
+
+
+--------------------
+2018-02-11 14:54:02 - Exception on message: {'id': '037xgk0dqe8e8', 'parent': '037xdu8zyl2ww', 'time': 1518360841, 'sender': {'id': 'account:01ha19ib9296o', 'name': 'Pouncy Silverkitten', 'server_id': 'heim.1', 'server_era': '03769mpwsey2o', 'session_id': '746564632d686e72744d593d-3f9069df49b5bbf1'}, 'content': '!stats', 'edited': None, 'deleted': None}:
+Traceback (most recent call last):
+  File "heimdall.py", line 319, in <module>
+    statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0], busiestDay[1], position, len(results)), message['data']['id'])
+NameError: name 'position' is not defined
+
+
+--------------------
+2018-02-11 14:56:09 - Exception on message: {'id': '037xgquduedxc', 'parent': '037xdu8zyl2ww', 'time': 1518360969, 'sender': {'id': 'account:01ha19ib9296o', 'name': 'Pouncy Silverkitten', 'server_id': 'heim.1', 'server_era': '03769mpwsey2o', 'session_id': '746564632d686e72744d593d-3f9069df49b5bbf1'}, 'content': '!kill @Heimdall', 'edited': None, 'deleted': None}:
+Traceback (most recent call last):
+  File "heimdall.py", line 219, in <module>
+    if message['type'] == 'send-event':
+TypeError: string indices must be integers
+
+
