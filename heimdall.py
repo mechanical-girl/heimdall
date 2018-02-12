@@ -18,7 +18,6 @@ sys.path.append('/home/struan/python/karelia/')
 
 import karelia
 from datetime import datetime, timedelta
-from pushover import Pushover
 import json
 import sqlite3
 import pprint
@@ -97,8 +96,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("room")
 parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
 args = parser.parse_args()
-po = Pushover("as2xsn2dmwcqytzhb7xcf4hrzwt84e")
-po.user = "ui5pi24yho8aj7pzpqnp6cjgzoij7q"
 
 # Get logs
 room = args.room
@@ -255,9 +252,6 @@ while True:
                             spider.disconnect()
                         except: pass
                 
-                if message['data']['sender']['name'] == "Stormageddon" :
-                    po.send(po.msg("Stormageddon Sent A Message").set("title","Stormy in &{}".format(room)))
-
                 # If it's asking for stats... well, let's give them stats.
                 if message['data']['content'][0:6] == '!stats':
                     if '@' in message['data']['content']:
@@ -290,8 +284,7 @@ while True:
                     c.execute('''SELECT * FROM {} WHERE normname IS ?'''.format(room), (normnick,))
                     datedmessages = c.fetchall()
                     for mess in datedmessages:
-                        sentDay = datetime.fromtimestamp(mess[6])
-                        day = "{}-{}-{}".format(sentDay.year, sentDay.month, sentDay.day)
+                        day = datetime.utcfromtimestamp(mess[6]).strftime("%Y-%m-%d")
                         try:
                             days[day] += 1
                         except:
