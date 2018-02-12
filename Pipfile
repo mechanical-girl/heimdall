@@ -9,7 +9,6 @@ name = "pypi"
 
 pushover = {git = "https://github.com/Wyattjoh/pushover"}
 websocket-client = "*"
-python-pushover = "*"
 
 
 [dev-packages]

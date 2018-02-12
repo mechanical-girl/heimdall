@@ -345,7 +345,7 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     results = c.fetchall()
                     topTen = ""
                     for i, result in enumerate(results):
-                        topTen += "{:2d}) {:<7} - {}\n".format(i+1, int(result[1]), result[0])
+                        topTen += "{:2d}) {:<7}\t{}\n".format(i+1, int(result[1]), result[0])
 
                     # Get activity over the last 28 days
                     lowerBound = datetime.now() + timedelta(-28)
@@ -354,7 +354,8 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     last28Days = c.fetchone()
                     perDayLastFourWeeks = int(last28Days[0]/28)
 
-                    heimdall.send("There have been {} posts in &{}, averaging {} per day over the last 28 days.\n\nThe top ten posters are:\n{}".format(count, room, perDayLastFourWeeks, topTen), message['data']['id'])
+                    heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days.\n\nThe top ten posters are:\n{}".format(count, room, perDayLastFourWeeks, topTen), message['data']['id'])
+
 
     except sqlite3.IntegrityError:
         conn.close()
