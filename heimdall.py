@@ -224,6 +224,8 @@ while True:
                 urls = []
                 titles = []
                 url_regex.sub(getUrls, message['data']['content'])
+                for url in urls:
+                    if "imgur.com/" in url: urls.remove(url)
                 if len(urls) > 0:
                     response = ""
                     for match in urls:
@@ -281,25 +283,56 @@ while True:
                     # Query gets the most recent message sent
                     c.execute('''SELECT * FROM {} WHERE normname IS ? ORDER BY time DESC'''.format(room), (normnick,))
                     latest = c.fetchone()
+                    
+                    # In the interest of finding the busiest day, let's do some quick conversion
+                    timestamp = datetime.fromtimestamp(earliest[6])
+                    days = {}
+                    c.execute('''SELECT * FROM {} WHERE normname IS ?'''.format(room), (normnick,))
+                    datedmessages = c.fetchall()
+                    for mess in datedmessages:
+                        sentDay = datetime.fromtimestamp(mess[6])
+                        day = "{}-{}-{}".format(sentDay.year, sentDay.month, sentDay.day)
+                        try:
+                            days[day] += 1
+                        except:
+                            days[day] = 1
+                    
+                    now = datetime.now()
+                    try:
+                        messagesToday = days["{}-{}-{}".format(now.year, now.month, now.day)]
+                    except:
+                        messagesToday = 0
+                    daysByBusyness =  [(k, days[k]) for k in sorted(days, key=days.get, reverse = True)]  
+                    busiestDay = daysByBusyness
 
                     # Calculate when the first message was sent, when the most recent message was sent, and the averate messages per day.
                     firstMessageSent = datetime.utcfromtimestamp(earliest[6]).strftime("%Y-%m-%d")
                     lastMessageSent = datetime.utcfromtimestamp(latest[6]).strftime("%Y-%m-%d")
                     numberOfDays = (datetime.strptime(lastMessageSent, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
-                    if lastMessageSent == datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d"): lastMessageSent = "today"
+                    if lastMessageSent == datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d"): lastMessageSent = "Today"
                     numberOfDays = numberOfDays if numberOfDays > 0 else 1
 
                     # Get requester's position.
                     c.execute('''SELECT * FROM {}posters ORDER BY count DESC'''.format(room))
                     results = c.fetchall()
+                    position = "unknown"
                     for i, result in enumerate(results):
                         if heimdall.normaliseNick(result[0]) == normnick:
                             position = i + 1
                             break
 
                     # Collate and send the lot.
-                    heimdall.send('User {} has sent {} messages under that nick in the history of the room, between {} days ago on {} ("{}") and {}, averaging {} messages per day. They are ranked {} of {}.'.format(
-                        statsOf, str(count), numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), position, len(results)), message['data']['id'])
+                    heimdall.send("""
+User:\t\t\t\t\t{}
+Messages:\t\t\t\t{}
+Messages Sent Today:\t\t{}
+First Message Date:\t\t{} days ago, on {}
+First Message:\t\t\t{}
+Most Recent Message:\t{}
+Average Messages/Day:\t{}
+Busiest Day:\t\t\t\t{}, with {} messages
+Ranking:\t\t\t\t\t{} of {}.""".format(
+                        statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, len(results)), message['data']['id'])
 
                 # If it's roomstats they want, well, let's get cracking!
                 elif message['data']['content'] == '!roomstats':
