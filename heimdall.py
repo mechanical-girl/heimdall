@@ -12,10 +12,6 @@ As of the time of writing, Heimdall achieves the following capabilities:
 - `!stats` returns the number of posts made under that nick
 """
 
-
-import sys
-sys.path.append('/home/struan/python/karelia/')
-
 import karelia
 from datetime import datetime, timedelta
 import json
@@ -28,7 +24,7 @@ import re
 import urllib.request
 import html
 import codecs
-
+import sys
 
 #Used for getting page titles
 url_regex = re.compile(r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))""")
@@ -70,7 +66,7 @@ def insertMessage(message, dbName, conn, c):
         except sqlite3.OperationalError:
             time.sleep(5)
 
-def updateCount(name, c):
+def updateCount(name, conn, c):
     try:
         c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?)'''.format(room), (name, 1,))
     except:
@@ -161,7 +157,7 @@ while True:
                              message['sender']['id'], message['sender']['name'], heimdall.normaliseNick(
                             message['sender']['name']),
                     message['time']))
-                names.add(message['sender']['name'])
+                names.add(heimdall.normaliseNick(message['sender']['name']))
             # Attempts to insert all the messages in bulk. If it fails, it will
             # break out of the loop and we will assume that the logs are now
             # up to date.
@@ -190,7 +186,7 @@ while True:
         break
 
 for name in names:
-    c.execute('''SELECT COUNT(*) FROM {} WHERE sendername IS ?'''.format(room), (name,))
+    c.execute('''SELECT COUNT(*) FROM {} WHERE normname IS ?'''.format(room), (name,))
     count = c.fetchone()[0]
     try:
         c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?)'''.format(room), (name, count,))
@@ -215,7 +211,7 @@ while True:
             # If the message is worth storing, we'll store it
             if message['type'] == 'send-event':
                 insertMessage(message, room, conn, c)
-                updateCount(message['data']['sender']['name'], c)
+                updateCount(message['data']['sender']['name'], conn, c)
 
                 #Check if the message has URLs
                 urls = []
