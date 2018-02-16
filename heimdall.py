@@ -50,7 +50,8 @@ def insertMessage(message, dbName, conn, c):
         data = (message['data']['content'], message['data']['id'], message['data']['parent'],
                 message['data']['sender']['id'], message['data']['sender']['name'], heimdall.normaliseNick(
                     message['data']['sender']['name']),
-                message['data']['time'])
+                 bb.
+                 message['data']['time'])
     else:
         if not 'parent' in message:
             message['parent'] = ''
@@ -68,11 +69,11 @@ def insertMessage(message, dbName, conn, c):
 
 def updateCount(name, conn, c):
     try:
-        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?)'''.format(room), (name, 1,))
+        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?,?)'''.format(room), (name, heimdall.normaliseNick(name), 1,))
     except:
-        c.execute('''SELECT * FROM {}posters WHERE name is ?'''.format(room), (name,))
-        newCount = c.fetchone()[1] + 1
-        c.execute('''UPDATE {}posters SET count = ? WHERE name = ?'''.format(room), (newCount, name,))
+        c.execute('''SELECT * FROM {}posters WHERE normname is ?'''.format(room), (heimdall.normaliseNick(name),))
+        newCount = c.fetchone()[2] + 1
+        c.execute('''UPDATE {}posters SET count = ?, name = ? WHERE normname = ?'''.format(room), (newCount, name, heimdall.normaliseNick(name),))
     conn.commit()
 
 #Catches URLs
@@ -118,10 +119,12 @@ except: pass
 try:
     c.execute('''CREATE TABLE {}posters(
                     name text,
+                    normname text,
                     count real
                 )'''.format(room))
-    c.execute('''CREATE UNIQUE INDEX name ON {}posters(name)'''.format(room))
+    c.execute('''CREATE UNIQUE INDEX normname ON {}posters(normname)'''.format(room))
     conn.commit()
+
 except: pass
 try:
     c.execute('''CREATE TABLE rooms(name text, password integer)''')
@@ -157,7 +160,7 @@ while True:
                              message['sender']['id'], message['sender']['name'], heimdall.normaliseNick(
                             message['sender']['name']),
                     message['time']))
-                names.add(heimdall.normaliseNick(message['sender']['name']))
+                names.add(message['sender']['name'])
             # Attempts to insert all the messages in bulk. If it fails, it will
             # break out of the loop and we will assume that the logs are now
             # up to date.
@@ -186,12 +189,12 @@ while True:
         break
 
 for name in names:
-    c.execute('''SELECT COUNT(*) FROM {} WHERE normname IS ?'''.format(room), (name,))
+    c.execute('''SELECT COUNT(*) FROM {} WHERE normname IS ?'''.format(room), (heimdall.normaliseNick(name),))
     count = c.fetchone()[0]
     try:
-        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?)'''.format(room), (name, count,))
+        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?,?)'''.format(room), (name, heimdall.normaliseNick(name), count,))
     except:
-        c.execute('''UPDATE {}posters SET count = ? WHERE name = ?'''.format(room), (count, name,))
+        c.execute('''UPDATE {}posters SET count = ? WHERE normname = ?'''.format(room), (count, heimdall.normaliseNick(name),))
 
 
 conn.commit()
@@ -286,11 +289,8 @@ while True:
                         except:
                             days[day] = 1
                     
-                    now = datetime.now()
-                    try:
-                        messagesToday = days["{}-{}-{}".format(now.year, now.month, now.day)]
-                    except:
-                        messagesToday = 0
+                    try: messagesToday = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
+                    except: messagesToday = 0
                     daysByBusyness =  [(k, days[k]) for k in sorted(days, key=days.get, reverse = True)]  
                     busiestDay = daysByBusyness
 
@@ -334,7 +334,7 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     results = c.fetchall()
                     topTen = ""
                     for i, result in enumerate(results):
-                        topTen += "{:2d}) {:<7}\t{}\n".format(i+1, int(result[1]), result[0])
+                        topTen += "{:2d}) {:<7}\t{}\n".format(i+1, int(result[2]), result[0])
 
                     # Get activity over the last 28 days
                     lowerBound = datetime.now() + timedelta(-28)
