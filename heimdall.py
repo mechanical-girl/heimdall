@@ -116,7 +116,7 @@ messagesPerDay = {}
 heimdall = karelia.newBot('Heimdall', room)
 heimdall.connect(True)
 
-conn = sqlite3.connect('logs.db')
+conn = sqlite3.connect('{}.db'.format(room))
 c = conn.cursor()
 
 # Create the table if it doesn't already exist
@@ -231,7 +231,7 @@ heimdall.disconnect()
 while True:
     try:
         heimdall.connect(args.stealth)
-        conn = sqlite3.connect('logs.db')
+        conn = sqlite3.connect('{}.db'.format(room))
         c = conn.cursor()
         while True:
             conn.commit()
@@ -374,7 +374,7 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     plt.savefig('output.png')
                     upload = imgurClient.upload_image("output.png")
 
-                    heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days.\n\nThe top ten posters are:\n{}/n {}".format(count, room, perDayLastFourWeeks, topTen, upload.link), message['data']['id'])
+                    heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days.\n\nThe top ten posters are:\n{}\n {}".format(count, room, perDayLastFourWeeks, topTen, upload.link), message['data']['id'])
 
 
     except sqlite3.IntegrityError:
