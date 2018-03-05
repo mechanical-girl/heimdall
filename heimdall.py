@@ -49,9 +49,7 @@ def insertMessage(message, dbName, conn, c):
             message['data']['parent'] = ''
         data = (message['data']['content'], message['data']['id'], message['data']['parent'],
                 message['data']['sender']['id'], message['data']['sender']['name'], heimdall.normaliseNick(
-                    message['data']['sender']['name']),
-                 bb.
-                 message['data']['time'])
+                    message['data']['sender']['name']), message['data']['time'])
     else:
         if not 'parent' in message:
             message['parent'] = ''
