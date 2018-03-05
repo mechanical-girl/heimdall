@@ -116,7 +116,7 @@ messagesPerDay = {}
 heimdall = karelia.newBot('Heimdall', room)
 heimdall.connect(True)
 
-conn = sqlite3.connect('logs.db')
+conn = sqlite3.connect('{}.db'.format(room))
 c = conn.cursor()
 
 # Create the table if it doesn't already exist
