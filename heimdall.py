@@ -12,13 +12,8 @@ As of the time of writing, Heimdall achieves the following capabilities:
 - `!stats` returns the number of posts made under that nick
 """
 
-
-import sys
-sys.path.append('/home/struan/python/karelia/')
-
 import karelia
 from datetime import datetime, timedelta
-from pushover import Pushover
 import json
 import sqlite3
 import pprint
@@ -29,7 +24,7 @@ import re
 import urllib.request
 import html
 import codecs
-
+import sys
 
 #Used for getting page titles
 url_regex = re.compile(r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))""")
@@ -54,8 +49,7 @@ def insertMessage(message, dbName, conn, c):
             message['data']['parent'] = ''
         data = (message['data']['content'], message['data']['id'], message['data']['parent'],
                 message['data']['sender']['id'], message['data']['sender']['name'], heimdall.normaliseNick(
-                    message['data']['sender']['name']),
-                message['data']['time'])
+                    message['data']['sender']['name']), message['data']['time'])
     else:
         if not 'parent' in message:
             message['parent'] = ''
@@ -71,13 +65,13 @@ def insertMessage(message, dbName, conn, c):
         except sqlite3.OperationalError:
             time.sleep(5)
 
-def updateCount(name, c):
+def updateCount(name, conn, c):
     try:
-        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?)'''.format(room), (name, 1,))
+        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?,?)'''.format(room), (name, heimdall.normaliseNick(name), 1,))
     except:
-        c.execute('''SELECT * FROM {}posters WHERE name is ?'''.format(room), (name,))
-        newCount = c.fetchone()[1] + 1
-        c.execute('''UPDATE {}posters SET count = ? WHERE name = ?'''.format(room), (newCount, name,))
+        c.execute('''SELECT * FROM {}posters WHERE normname is ?'''.format(room), (heimdall.normaliseNick(name),))
+        newCount = c.fetchone()[2] + 1
+        c.execute('''UPDATE {}posters SET count = ?, name = ? WHERE normname = ?'''.format(room), (newCount, name, heimdall.normaliseNick(name),))
     conn.commit()
 
 #Catches URLs
@@ -97,8 +91,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("room")
 parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
 args = parser.parse_args()
-po = Pushover("as2xsn2dmwcqytzhb7xcf4hrzwt84e")
-po.user = "ui5pi24yho8aj7pzpqnp6cjgzoij7q"
 
 # Get logs
 room = args.room
@@ -125,10 +117,12 @@ except: pass
 try:
     c.execute('''CREATE TABLE {}posters(
                     name text,
+                    normname text,
                     count real
                 )'''.format(room))
-    c.execute('''CREATE UNIQUE INDEX name ON {}posters(name)'''.format(room))
+    c.execute('''CREATE UNIQUE INDEX normname ON {}posters(normname)'''.format(room))
     conn.commit()
+
 except: pass
 try:
     c.execute('''CREATE TABLE rooms(name text, password integer)''')
@@ -193,12 +187,12 @@ while True:
         break
 
 for name in names:
-    c.execute('''SELECT COUNT(*) FROM {} WHERE sendername IS ?'''.format(room), (name,))
+    c.execute('''SELECT COUNT(*) FROM {} WHERE normname IS ?'''.format(room), (heimdall.normaliseNick(name),))
     count = c.fetchone()[0]
     try:
-        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?)'''.format(room), (name, count,))
+        c.execute('''INSERT OR FAIL INTO {}posters VALUES(?,?,?)'''.format(room), (name, heimdall.normaliseNick(name), count,))
     except:
-        c.execute('''UPDATE {}posters SET count = ? WHERE name = ?'''.format(room), (count, name,))
+        c.execute('''UPDATE {}posters SET count = ? WHERE normname = ?'''.format(room), (count, heimdall.normaliseNick(name),))
 
 
 conn.commit()
@@ -218,7 +212,7 @@ while True:
             # If the message is worth storing, we'll store it
             if message['type'] == 'send-event':
                 insertMessage(message, room, conn, c)
-                updateCount(message['data']['sender']['name'], c)
+                updateCount(message['data']['sender']['name'], conn, c)
 
                 #Check if the message has URLs
                 urls = []
@@ -255,9 +249,6 @@ while True:
                             spider.disconnect()
                         except: pass
                 
-                if message['data']['sender']['name'] == "Stormageddon" :
-                    po.send(po.msg("Stormageddon Sent A Message").set("title","Stormy in &{}".format(room)))
-
                 # If it's asking for stats... well, let's give them stats.
                 if message['data']['content'][0:6] == '!stats':
                     if '@' in message['data']['content']:
@@ -290,18 +281,14 @@ while True:
                     c.execute('''SELECT * FROM {} WHERE normname IS ?'''.format(room), (normnick,))
                     datedmessages = c.fetchall()
                     for mess in datedmessages:
-                        sentDay = datetime.fromtimestamp(mess[6])
-                        day = "{}-{}-{}".format(sentDay.year, sentDay.month, sentDay.day)
+                        day = datetime.utcfromtimestamp(mess[6]).strftime("%Y-%m-%d")
                         try:
                             days[day] += 1
                         except:
                             days[day] = 1
                     
-                    now = datetime.now()
-                    try:
-                        messagesToday = days["{}-{}-{}".format(now.year, now.month, now.day)]
-                    except:
-                        messagesToday = 0
+                    try: messagesToday = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
+                    except: messagesToday = 0
                     daysByBusyness =  [(k, days[k]) for k in sorted(days, key=days.get, reverse = True)]  
                     busiestDay = daysByBusyness
 
@@ -345,7 +332,7 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     results = c.fetchall()
                     topTen = ""
                     for i, result in enumerate(results):
-                        topTen += "{:2d}) {:<7}\t{}\n".format(i+1, int(result[1]), result[0])
+                        topTen += "{:2d}) {:<7}\t{}\n".format(i+1, int(result[2]), result[0])
 
                     # Get activity over the last 28 days
                     lowerBound = datetime.now() + timedelta(-28)
