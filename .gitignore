@@ -1,0 +1,5 @@
+*.db*
+*.log
+Pipfile.lock
+imgur.json
+output.png
