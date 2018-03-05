@@ -13,7 +13,7 @@ As of the time of writing, Heimdall achieves the following capabilities:
 """
 
 import karelia
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import json
 import sqlite3
 import pprint
@@ -25,6 +25,9 @@ import urllib.request
 import html
 import codecs
 import sys
+import calendar
+import matplotlib.pyplot as plt
+import pyimgur
 
 #Used for getting page titles
 url_regex = re.compile(r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))""")
@@ -74,6 +77,17 @@ def updateCount(name, conn, c):
         c.execute('''UPDATE {}posters SET count = ?, name = ? WHERE normname = ?'''.format(room), (newCount, name, heimdall.normaliseNick(name),))
     conn.commit()
 
+def nextDay(day):
+    oneDay = 60*60*24
+    return(int(calendar.timegm(date.fromtimestamp(day).timetuple())+oneDay))
+
+def updateMessageCount(timestamp):
+    day = nextDay(int(timestamp)-60*60*24)
+    if day in messagesPerDay:
+        messagesPerDay[day] += 1
+    else:
+        messagesPerDay[day] = 1
+
 #Catches URLs
 def getUrls(m):
     global urls
@@ -85,6 +99,9 @@ def onSIGINT(signum, frame):
     conn.close()
     sys.exit(0)
 
+with open('imgur.json', 'r') as f:
+    imgurClient = pyimgur.Imgur(json.loads(f.read())[0])
+
 signal.signal(signal.SIGINT, onSIGINT)
 
 parser = argparse.ArgumentParser()
@@ -94,6 +111,7 @@ args = parser.parse_args()
 
 # Get logs
 room = args.room
+messagesPerDay = {}
 
 heimdall = karelia.newBot('Heimdall', room)
 heimdall.connect(True)
@@ -194,6 +212,15 @@ for name in names:
     except:
         c.execute('''UPDATE {}posters SET count = ? WHERE normname = ?'''.format(room), (count, heimdall.normaliseNick(name),))
 
+c.execute('''SELECT * FROM {} ORDER BY time ASC LIMIT 1'''.format(room))
+firstMessage = int(c.fetchone()[6])
+firstDate = date.fromtimestamp(firstMessage)
+day = calendar.timegm(date.fromtimestamp(firstMessage).timetuple())
+
+while time.time() > day:
+    c.execute('''SELECT count(*) FROM {} WHERE ? <= time AND time < ?'''.format(room), (int(day), int(nextDay(day))))
+    messagesPerDay[day] = int(c.fetchone()[0])
+    day = nextDay(day)
 
 conn.commit()
 conn.close()
@@ -213,6 +240,7 @@ while True:
             if message['type'] == 'send-event':
                 insertMessage(message, room, conn, c)
                 updateCount(message['data']['sender']['name'], conn, c)
+                updateMessageCount(message['data']['time'])
 
                 #Check if the message has URLs
                 urls = []
@@ -341,7 +369,12 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     last28Days = c.fetchone()
                     perDayLastFourWeeks = int(last28Days[0]/28)
 
-                    heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days.\n\nThe top ten posters are:\n{}".format(count, room, perDayLastFourWeeks, topTen), message['data']['id'])
+                    plt.plot([date.fromtimestamp(day) for day in messagesPerDay],[messagesPerDay[day] for day in messagesPerDay])
+                    plt.gcf().autofmt_xdate()
+                    plt.savefig('output.png')
+                    upload = imgurClient.upload_image("output.png")
+
+                    heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days.\n\nThe top ten posters are:\n{}/n {}".format(count, room, perDayLastFourWeeks, topTen, upload.link), message['data']['id'])
 
 
     except sqlite3.IntegrityError:
