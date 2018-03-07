@@ -85,6 +85,19 @@ def onSIGINT(signum, frame):
     conn.close()
     sys.exit(0)
 
+def getPosition(nick):
+    c.execute('''SELECT * FROM {}posters ORDER BY count DESC'''.format(room))
+    results = c.fetchall()
+    position = "unknown"
+    normnick = heimdall.normaliseNick(nick)
+    for i, result in enumerate(results):
+        if heimdall.normaliseNick(result[0]) == normnick:
+            position = i + 1
+            
+    return(position, results)
+
+
+
 signal.signal(signal.SIGINT, onSIGINT)
 
 parser = argparse.ArgumentParser()
@@ -300,13 +313,7 @@ while True:
                     numberOfDays = numberOfDays if numberOfDays > 0 else 1
 
                     # Get requester's position.
-                    c.execute('''SELECT * FROM {}posters ORDER BY count DESC'''.format(room))
-                    results = c.fetchall()
-                    position = "unknown"
-                    for i, result in enumerate(results):
-                        if heimdall.normaliseNick(result[0]) == normnick:
-                            position = i + 1
-                            break
+                    position, results = getPosition(normnick)
 
                     # Collate and send the lot.
                     heimdall.send("""
@@ -343,6 +350,13 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
 
                     heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days.\n\nThe top ten posters are:\n{}".format(count, room, perDayLastFourWeeks, topTen), message['data']['id'])
 
+                elif message['data']['content'].startswith('!rank'):
+                    words = message['data']['content'].split()
+                    if len(words) == 1:
+                        request = message['data']['sender']['name']
+                    else: request = words[1][1:]
+                    position, _ = getPosition(request)
+                    heimdall.send(str(int(position)), message['data']['id'])
 
     except sqlite3.IntegrityError:
         conn.close()
