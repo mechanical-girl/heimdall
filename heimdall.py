@@ -428,5 +428,3 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
         heimdall.disconnect()
     finally:
         time.sleep(5)
-
-conn.close()
