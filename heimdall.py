@@ -28,6 +28,7 @@ import sys
 import calendar
 import matplotlib.pyplot as plt
 import pyimgur
+import operator
 
 #Used for getting page titles
 url_regex = re.compile(r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))""")
@@ -374,16 +375,32 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     # Get activity over the last 28 days
                     lowerBound = datetime.now() + timedelta(-28)
                     lowerBound = time.mktime(lowerBound.timetuple())
-                    c.execute('''SELECT count(*) FROM {} WHERE time > ?'''.format(room), (lowerBound,))
-                    last28Days = c.fetchone()
-                    perDayLastFourWeeks = int(last28Days[0]/28)
+                    c.execute('''SELECT * FROM {} WHERE time > ?'''.format(room), (lowerBound,))
+                    last28Days = c.fetchall()
+                    perDayLastFourWeeks = int(len(last28Days[0])/28)
+                    
+                    days = {}
+                    for m in last28Days:
+                        day = datetime.fromtimestamp(m[6]).strftime('%Y-%m-%d')
+                        if day in days: days[day] += 1
+                        else: days[day] = 1
+
+                    byDay = []
+                    for key, value in iter(days.items()):
+                        byDay.append([key, value])
+
+                    byDay.sort(key=operator.itemgetter(1))
+                    busiest = byDay[-1]
 
                     plt.plot([date.fromtimestamp(day) for day in messagesPerDay],[messagesPerDay[day] for day in messagesPerDay])
                     plt.gcf().autofmt_xdate()
                     plt.savefig('output.png')
                     upload = imgurClient.upload_image("output.png")
 
-                    heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days.\n\nThe top ten posters are:\n{}\n {}".format(count, room, perDayLastFourWeeks, topTen, upload.link), message['data']['id'])
+                    heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {}".format(
+                        count, room, perDayLastFourWeeks, 
+                        busiest[0], busiest[1], 
+                        topTen, upload.link), message['data']['id'])
 
                 elif message['data']['content'].startswith('!rank'):
                     words = message['data']['content'].split()
