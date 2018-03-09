@@ -102,21 +102,18 @@ def onSIGINT(signum, frame):
 
 
 def getPosition(nick):
-    c.execute('''SELECT * FROM {}posters ORDER BY count DESC'''.format(room))
-    results = c.fetchall()
-    position = "unknown"
+    c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(room))
     normnick = heimdall.normaliseNick(nick)
-    for i, result in enumerate(results):
-        if heimdall.normaliseNick(result[0]) == normnick:
-            position = i + 1
+    position = 0
+    while True:
+        result = c.fetchone()
+        if result[0] == normnick:
+            return(i)
             
     return(position, results)
 
-
-
 with open('imgur.json', 'r') as f:
     imgurClient = pyimgur.Imgur(json.loads(f.read())[0])
-
 
 signal.signal(signal.SIGINT, onSIGINT)
 
@@ -129,8 +126,15 @@ args = parser.parse_args()
 room = args.room
 messagesPerDay = {}
 
+startTime = time.time()
+print('Connecting to euphoria...', end='')
+
 heimdall = karelia.newBot('Heimdall', room)
 heimdall.connect(True)
+
+print(' done in {} seconds\nConnecting to database...'.format(round(time.time()-startTime,2)),end='')
+
+startTime = time.time()
 
 conn = sqlite3.connect('{}.db'.format(room))
 c = conn.cursor()
@@ -147,7 +151,7 @@ try:
                     time real
                  )'''.format(room))
     c.execute('''CREATE UNIQUE INDEX messageID ON {}(id)'''.format(room))
-except: pass
+except: print(' existing tables found...', end='')
 try:
     c.execute('''CREATE TABLE {}posters(
                     name text,
@@ -164,7 +168,11 @@ try:
     conn.commit()
 except: pass
 
+print(' done in {} seconds\nPulling logs'.format(round(time.time()-startTime,2)))
+
 # Start pulling logs
+startTime = time.time()
+
 heimdall.send({'type': 'log', 'data': {'n': 1000}})
 names = set()
 
@@ -181,7 +189,7 @@ while True:
         if reply['type'] == 'log-reply':
             # Helps keep track of where we are
             disp = reply['data']['log'][0]
-            print('({})[{}] {}'.format(datetime.utcfromtimestamp(disp['time']).strftime("%Y-%m-%d %H:%M"),
+            print('    ({})[{}] {}'.format(datetime.utcfromtimestamp(disp['time']).strftime("%Y-%m-%d %H:%M"),
                                        disp['sender']['name'].translate(heimdall.non_bmp_map), disp['content'].translate(heimdall.non_bmp_map)))
 
             # Append the data in this message to the data list ready for executemany
@@ -220,6 +228,9 @@ while True:
     except UpdateDone:
         break
 
+print('Done in {} seconds\nAdding nicks to table...'.format(round(time.time()-startTime,2)), end='')
+startTime = time.time()
+
 for name in names:
     c.execute('''SELECT COUNT(*) FROM {} WHERE normname IS ?'''.format(room), (heimdall.normaliseNick(name),))
     count = c.fetchone()[0]
@@ -228,15 +239,18 @@ for name in names:
     except:
         c.execute('''UPDATE {}posters SET count = ? WHERE normname = ?'''.format(room), (count, heimdall.normaliseNick(name),))
 
+print(' done in {} seconds\nLoading number of messages/day...'.format(round(time.time()-startTime,2)),end='')
+startTime = time.time()
 c.execute('''SELECT * FROM {} ORDER BY time ASC LIMIT 1'''.format(room))
-firstMessage = int(c.fetchone()[6])
-firstDate = date.fromtimestamp(firstMessage)
-day = calendar.timegm(date.fromtimestamp(firstMessage).timetuple())
+firstDate = date.fromtimestamp(int(c.fetchone()))
+day = calendar.timegm(firstDate..timetuple())
 
 while time.time() > day:
     c.execute('''SELECT count(*) FROM {} WHERE ? <= time AND time < ?'''.format(room), (int(day), int(nextDay(day))))
     messagesPerDay[day] = int(c.fetchone()[0])
     day = nextDay(day)
+
+print(' done in {} seconds'.format(round(time.time()-startTime,2)))
 
 conn.commit()
 conn.close()
@@ -257,6 +271,7 @@ while True:
                 insertMessage(message, room, conn, c)
                 updateCount(message['data']['sender']['name'], conn, c)
                 updateMessageCount(message['data']['time'])
+                messagesPerDay[day] += 1
 
                 #Check if the message has URLs
                 urls = []
@@ -344,8 +359,9 @@ while True:
                     numberOfDays = numberOfDays if numberOfDays > 0 else 1
 
                     # Get requester's position.
-                    position, results = getPosition(normnick)
-
+                    position = getPosition(normnick)
+                    c.execute('''SELECT count(*) FROM {}posters'''.format(room))
+                    results = c.fetchone()[0]
                     # Collate and send the lot.
                     heimdall.send("""
 User:\t\t\t\t\t{}
@@ -357,7 +373,7 @@ Most Recent Message:\t{}
 Average Messages/Day:\t{}
 Busiest Day:\t\t\t\t{}, with {} messages
 Ranking:\t\t\t\t\t{} of {}.""".format(
-                        statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, len(results)), message['data']['id'])
+                        statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, results, message['data']['id']))
 
                 # If it's roomstats they want, well, let's get cracking!
                 elif message['data']['content'] == '!roomstats':
@@ -416,7 +432,7 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     if len(words) == 1:
                         request = message['data']['sender']['name']
                     else: request = words[1][1:]
-                    position, _ = getPosition(request)
+                    position = getPosition(request)
                     heimdall.send(str(int(position)), message['data']['id'])
 
     except sqlite3.IntegrityError:
