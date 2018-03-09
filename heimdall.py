@@ -390,6 +390,8 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     last28Days.sort(key=operator.itemgetter(1))
                     busiest = (datetime.utcfromtimestamp(last28Days[-1][0]).strftime("%Y-%m-%d"),last28Days[-1][1])
 
+                    last28Days.sort(key=operator.itemgetter(0))
+
                     # Get the number of messages today
                     midnight = time.mktime(datetime.combine(date.today(), dttime.min).timetuple())
                     for tup in last28Days:
@@ -400,20 +402,34 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     c.execute('''SELECT time, COUNT(*) FROM {} GROUP BY CAST(time/86400 AS INT)'''.format(room))
                     messagesByDay = c.fetchall()
 
-                    # Plot and upload the messages, all time graph
-                    plt.title("Messages in &{}, all time".format(room))
-                    plt.plot([date.fromtimestamp(int(day[0])) for day in messagesByDay],
-                             [day[1] for day in messagesByDay])
+                    # Plot and upload the messages, last 28 days graph
+                    f, ax = plt.subplots(1)
+                    plt.title("Messages in &{}, last 28 days".format(room))
+                    ax.plot([date.fromtimestamp(int(day[0])) for day in last28Days],
+                             [day[1] for day in last28Days])
                     plt.gcf().autofmt_xdate()
+                    ax.set_ylim(ymin=0)
                     filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
-                    plt.savefig(filename)
-                    upload = imgurClient.upload_image(filename)
+                    f.savefig(filename)
+                    last28Url = imgurClient.upload_image(filename).link
                     os.remove(filename)
 
-                    heimdall.send("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {}".format(
+                    # Plot and upload the messages, all time graph
+                    f, ax = plt.subplots(1)
+                    plt.title("Messages in &{}, all time".format(room))
+                    ax.plot([date.fromtimestamp(int(day[0])) for day in messagesByDay],
+                             [day[1] for day in messagesByDay])
+                    plt.gcf().autofmt_xdate()
+                    ax.set_ylim(ymin=0)
+                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
+                    f.savefig(filename)
+                    allTimeUrl = imgurClient.upload_image(filename).link
+                    os.remove(filename)
+
+                    heimdall.send("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {} {}".format(
                         count, room, messagesToday, perDayLastFourWeeks, 
                         busiest[0], busiest[1], 
-                        topTen, upload.link), message['data']['id'])
+                        topTen, allTimeUrl, last28Url), message['data']['id'])
 
                 elif message['data']['content'].startswith('!rank'):
                     words = message['data']['content'].split()
