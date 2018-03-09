@@ -110,11 +110,12 @@ def getPosition(nick):
     normnick = heimdall.normaliseNick(nick)
     position = 0
     while True:
+        position += 1
         result = c.fetchone()
         if result[0] == normnick:
-            return(i)
+            return(position)
             
-    return(position, results)
+    return("unknown")
 
 with open('imgur.json', 'r') as f:
     imgurClient = pyimgur.Imgur(json.loads(f.read())[0])
@@ -331,13 +332,10 @@ while True:
                     days = {}
                     c.execute('''SELECT time, COUNT(*) FROM {} WHERE normname IS ? GROUP BY CAST(time / 86400 AS INT)'''.format(room), (normnick,))
                     dailyMessages = c.fetchall()
-                    days
+                    days = {}
                     for mess in dailyMessages:
-                        day = datetime.utcfromtimestamp(mess[6]).strftime("%Y-%m-%d")
-                        try:
-                            days[day] += 1
-                        except:
-                            days[day] = 1
+                        day = datetime.utcfromtimestamp(mess[0]).strftime("%Y-%m-%d")
+                        days[day] = mess[1]
                     
                     try: messagesToday = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
                     except: messagesToday = 0
@@ -350,7 +348,8 @@ while True:
                     numberOfDays = (datetime.strptime(lastMessageSent, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
                     if lastMessageSent == datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d"): lastMessageSent = "Today"
                     numberOfDays = numberOfDays if numberOfDays > 0 else 1
-
+                    
+                    """
                     f, ax = plt.subplots(1)
                     plt.title("Messages in &{}, last 28 days".format(room))
                     ax.plot([date.fromtimestamp(int(day[0])) for day in last28Days],
@@ -372,11 +371,12 @@ while True:
                     f.savefig(filename)
                     last28Url = imgurClient.upload_image(filename).link
                     os.remove(filename)
+                    """
 
                     # Get requester's position.
                     position = getPosition(normnick)
                     c.execute('''SELECT count(*) FROM {}posters'''.format(room))
-                    results = c.fetchone()[0]
+                    noOfPosters = c.fetchone()[0]
                     # Collate and send the lot.
                     heimdall.send("""
 User:\t\t\t\t\t{}
@@ -388,7 +388,7 @@ Most Recent Message:\t{}
 Average Messages/Day:\t{}
 Busiest Day:\t\t\t\t{}, with {} messages
 Ranking:\t\t\t\t\t{} of {}.""".format(
-                        statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, results, message['data']['id']))
+                        statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, noOfPosters), message['data']['id'])
 
                 # If it's roomstats they want, well, let's get cracking!
                 elif message['data']['content'] == '!roomstats':
