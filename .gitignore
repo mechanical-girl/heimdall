@@ -2,4 +2,4 @@
 *.log
 Pipfile.lock
 imgur.json
-output.png
+*.png

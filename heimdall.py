@@ -394,8 +394,10 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
 
                     plt.plot([date.fromtimestamp(day) for day in messagesPerDay],[messagesPerDay[day] for day in messagesPerDay])
                     plt.gcf().autofmt_xdate()
-                    plt.savefig('output.png')
-                    upload = imgurClient.upload_image("output.png")
+                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
+                    plt.savefig(filename)
+                    upload = imgurClient.upload_image(filename)
+                    os.remove(filename)
 
                     heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {}".format(
                         count, room, perDayLastFourWeeks, 
