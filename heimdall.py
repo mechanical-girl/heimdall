@@ -14,6 +14,7 @@ As of the time of writing, Heimdall achieves the following capabilities:
 
 import karelia
 from datetime import datetime, timedelta, date
+from datetime import time as dttime
 import json
 import sqlite3
 import pprint
@@ -29,6 +30,9 @@ import calendar
 import matplotlib.pyplot as plt
 import pyimgur
 import operator
+import random
+import string
+import os
 
 #Used for getting page titles
 url_regex = re.compile(r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))""")
@@ -239,17 +243,6 @@ for name in names:
     except:
         c.execute('''UPDATE {}posters SET count = ? WHERE normname = ?'''.format(room), (count, heimdall.normaliseNick(name),))
 
-print(' done in {} seconds\nLoading number of messages/day...'.format(round(time.time()-startTime,2)),end='')
-startTime = time.time()
-c.execute('''SELECT * FROM {} ORDER BY time ASC LIMIT 1'''.format(room))
-firstDate = date.fromtimestamp(int(c.fetchone()))
-day = calendar.timegm(firstDate..timetuple())
-
-while time.time() > day:
-    c.execute('''SELECT count(*) FROM {} WHERE ? <= time AND time < ?'''.format(room), (int(day), int(nextDay(day))))
-    messagesPerDay[day] = int(c.fetchone()[0])
-    day = nextDay(day)
-
 print(' done in {} seconds'.format(round(time.time()-startTime,2)))
 
 conn.commit()
@@ -271,7 +264,6 @@ while True:
                 insertMessage(message, room, conn, c)
                 updateCount(message['data']['sender']['name'], conn, c)
                 updateMessageCount(message['data']['time'])
-                messagesPerDay[day] += 1
 
                 #Check if the message has URLs
                 urls = []
@@ -391,28 +383,19 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     # Get activity over the last 28 days
                     lowerBound = datetime.now() + timedelta(-28)
                     lowerBound = time.mktime(lowerBound.timetuple())
-                    c.execute('''SELECT * FROM {} WHERE time > ?'''.format(room), (lowerBound,))
+                    c.execute('''SELECT time, COUNT(*) FROM {} WHERE time > ? GROUP BY CAST(time / 86400 AS INT)'''.format(room), (lowerBound,))
                     last28Days = c.fetchall()
-                    perDayLastFourWeeks = int(len(last28Days[0])/28)
+                    perDayLastFourWeeks = int(sum([count[1] for count in last28Days])/28)
                     
-                    # Put activity in the last 28 days into a dict
-                    days = {}
-                    for m in last28Days:
-                        day = datetime.fromtimestamp(m[6]).strftime('%Y-%m-%d')
-                        if day in days: days[day] += 1
-                        else: days[day] = 1
-
-                    # Convert list into dict and order it
-                    byDay = []
-                    for key, value in iter(days.items()):
-                        byDay.append([key, value])
-
-                    byDay.sort(key=operator.itemgetter(1))
-                    busiest = byDay[-1]
+                    last28Days.sort(key=operator.itemgetter(1))
+                    busiest = (datetime.utcfromtimestamp(last28Days[-1][0]).strftime("%Y-%m-%d"),last28Days[1])
 
                     # Get the number of messages today
-                    today = datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d')
-                    messagesToday = byDay[today]
+                    midnight = time.mktime(datetime.combine(date.today(), dttime.min).timetuple())
+                    for tup in last28Days:
+                        if tup[0] > midnight:
+                            messagesToday = tup[1]
+                            break
 
                     # Plot and upload the graph
                     plt.plot([date.fromtimestamp(day) for day in messagesPerDay],[messagesPerDay[day] for day in messagesPerDay])
