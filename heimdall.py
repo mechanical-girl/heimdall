@@ -86,13 +86,6 @@ def nextDay(day):
     oneDay = 60*60*24
     return(int(calendar.timegm(date.fromtimestamp(day).timetuple())+oneDay))
 
-def updateMessageCount(timestamp):
-    day = nextDay(int(timestamp)-60*60*24)
-    if day in messagesPerDay:
-        messagesPerDay[day] += 1
-    else:
-        messagesPerDay[day] = 1
-
 #Catches URLs
 def getUrls(m):
     global urls
@@ -274,10 +267,11 @@ while True:
             conn.commit()
             message = heimdall.parse()
             # If the message is worth storing, we'll store it
-            if message['type'] == 'send-event':
+            if message['type'] == 'send-event' or message['type'] == 'send-reply':
                 insertMessage(message, room, conn, c)
                 updateCount(message['data']['sender']['name'], conn, c)
-                updateMessageCount(message['data']['time'])
+
+                if message['type'] == 'send-reply': continue
 
                 #Check if the message has URLs
                 urls = []
@@ -372,7 +366,6 @@ while True:
                     title = "Messages by {}, all time".format(statsOf)
                     dataX = [day[0] for day in messagesAllTime]
                     dataY = [day[1] for day in messagesAllTime]
-                    print(len(dataX))
                     allTimeUrl = graphData(dataX, dataY, title)
 
                     # Get requester's position.
@@ -436,7 +429,6 @@ Ranking:\t\t\t\t\t{} of {}.
                     # Plot and upload the messages, all time graph
                     title = "Messages in &{}, all time".format(room)
                     dataX = [date.fromtimestamp(int(day[0])) for day in messagesByDay]
-                    print(len(dataX))
                     dataY = [day[1] for day in messagesByDay]
                     allTimeUrl = graphData(dataX, dataY, title)
 
