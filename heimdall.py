@@ -400,7 +400,8 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     c.execute('''SELECT time, COUNT(*) FROM {} GROUP BY CAST(time/86400 AS INT)'''.format(room))
                     messagesByDay = c.fetchall()
 
-                    # Plot and upload the graph
+                    # Plot and upload the messages, all time graph
+                    plt.title("Messages in &{}, all time".format(room))
                     plt.plot([date.fromtimestamp(int(day[0])) for day in messagesByDay],
                              [day[1] for day in messagesByDay])
                     plt.gcf().autofmt_xdate()
