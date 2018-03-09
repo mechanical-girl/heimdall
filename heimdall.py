@@ -116,6 +116,7 @@ def graphData(dataX, dataY, title):
     plt.title(title)
     ax.plot(dataX, dataY)
     plt.gcf().autofmt_xdate()
+    ax.xaxis.set_major_locator(plt.MaxNLocator(10))
     ax.set_ylim(ymin=0)
     filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
     f.savefig(filename)
