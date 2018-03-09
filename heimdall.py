@@ -388,7 +388,7 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     perDayLastFourWeeks = int(sum([count[1] for count in last28Days])/28)
                     
                     last28Days.sort(key=operator.itemgetter(1))
-                    busiest = (datetime.utcfromtimestamp(last28Days[-1][0]).strftime("%Y-%m-%d"),last28Days[1])
+                    busiest = (datetime.utcfromtimestamp(last28Days[-1][0]).strftime("%Y-%m-%d"),last28Days[-1][1])
 
                     # Get the number of messages today
                     midnight = time.mktime(datetime.combine(date.today(), dttime.min).timetuple())
@@ -397,8 +397,12 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                             messagesToday = tup[1]
                             break
 
+                    c.execute('''SELECT time, COUNT(*) FROM {} GROUP BY CAST(time/86400 AS INT)'''.format(room))
+                    messagesByDay = c.fetchall()
+
                     # Plot and upload the graph
-                    plt.plot([date.fromtimestamp(day) for day in messagesPerDay],[messagesPerDay[day] for day in messagesPerDay])
+                    plt.plot([date.fromtimestamp(int(day[0])) for day in messagesByDay],
+                             [day[1] for day in messagesByDay])
                     plt.gcf().autofmt_xdate()
                     filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
                     plt.savefig(filename)
