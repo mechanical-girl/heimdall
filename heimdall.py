@@ -329,9 +329,10 @@ while True:
                     # In the interest of finding the busiest day, let's do some quick conversion
                     timestamp = datetime.fromtimestamp(earliest[6])
                     days = {}
-                    c.execute('''SELECT * FROM {} WHERE normname IS ?'''.format(room), (normnick,))
-                    datedmessages = c.fetchall()
-                    for mess in datedmessages:
+                    c.execute('''SELECT time, COUNT(*) FROM {} WHERE normname IS ? GROUP BY CAST(time / 86400 AS INT)'''.format(room), (normnick,))
+                    dailyMessages = c.fetchall()
+                    days
+                    for mess in dailyMessages:
                         day = datetime.utcfromtimestamp(mess[6]).strftime("%Y-%m-%d")
                         try:
                             days[day] += 1
@@ -349,6 +350,28 @@ while True:
                     numberOfDays = (datetime.strptime(lastMessageSent, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
                     if lastMessageSent == datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d"): lastMessageSent = "Today"
                     numberOfDays = numberOfDays if numberOfDays > 0 else 1
+
+                    f, ax = plt.subplots(1)
+                    plt.title("Messages in &{}, last 28 days".format(room))
+                    ax.plot([date.fromtimestamp(int(day[0])) for day in last28Days],
+                             [day[1] for day in last28Days])
+                    plt.gcf().autofmt_xdate()
+                    ax.set_ylim(ymin=0)
+                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
+                    f.savefig(filename)
+                    last28Url = imgurClient.upload_image(filename).link
+                    os.remove(filename)
+
+                    f, ax = plt.subplots(1)
+                    plt.title("Messages in &{}, last 28 days".format(room))
+                    ax.plot([date.fromtimestamp(int(day[0])) for day in last28Days],
+                             [day[1] for day in last28Days])
+                    plt.gcf().autofmt_xdate()
+                    ax.set_ylim(ymin=0)
+                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
+                    f.savefig(filename)
+                    last28Url = imgurClient.upload_image(filename).link
+                    os.remove(filename)
 
                     # Get requester's position.
                     position = getPosition(normnick)
