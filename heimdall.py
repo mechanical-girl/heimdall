@@ -379,12 +379,14 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     last28Days = c.fetchall()
                     perDayLastFourWeeks = int(len(last28Days[0])/28)
                     
+                    # Put activity in the last 28 days into a dict
                     days = {}
                     for m in last28Days:
                         day = datetime.fromtimestamp(m[6]).strftime('%Y-%m-%d')
                         if day in days: days[day] += 1
                         else: days[day] = 1
 
+                    # Convert list into dict and order it
                     byDay = []
                     for key, value in iter(days.items()):
                         byDay.append([key, value])
@@ -392,6 +394,11 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     byDay.sort(key=operator.itemgetter(1))
                     busiest = byDay[-1]
 
+                    # Get the number of messages today
+                    today = datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d')
+                    messagesToday = byDay[today]
+
+                    # Plot and upload the graph
                     plt.plot([date.fromtimestamp(day) for day in messagesPerDay],[messagesPerDay[day] for day in messagesPerDay])
                     plt.gcf().autofmt_xdate()
                     filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
@@ -399,8 +406,8 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     upload = imgurClient.upload_image(filename)
                     os.remove(filename)
 
-                    heimdall.send("There have been {} posts in &{}, averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {}".format(
-                        count, room, perDayLastFourWeeks, 
+                    heimdall.send("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {}".format(
+                        count, room, messagesToday, perDayLastFourWeeks, 
                         busiest[0], busiest[1], 
                         topTen, upload.link), message['data']['id'])
 
