@@ -117,6 +117,19 @@ def getPosition(nick):
             
     return("unknown")
 
+def graphData(dataX, dataY, title):
+    # Plot and upload the messages, last 28 days graph 
+    f, ax = plt.subplots(1)
+    plt.title(title)
+    ax.plot(dataX, dataY)
+    plt.gcf().autofmt_xdate()
+    ax.set_ylim(ymin=0)
+    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
+    f.savefig(filename)
+    url = imgurClient.upload_image(filename).link
+    os.remove(filename)
+    return(url)
+    
 with open('imgur.json', 'r') as f:
     imgurClient = pyimgur.Imgur(json.loads(f.read())[0])
 
@@ -349,29 +362,18 @@ while True:
                     if lastMessageSent == datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d"): lastMessageSent = "Today"
                     numberOfDays = numberOfDays if numberOfDays > 0 else 1
                     
-                    """
-                    f, ax = plt.subplots(1)
-                    plt.title("Messages in &{}, last 28 days".format(room))
-                    ax.plot([date.fromtimestamp(int(day[0])) for day in last28Days],
-                             [day[1] for day in last28Days])
-                    plt.gcf().autofmt_xdate()
-                    ax.set_ylim(ymin=0)
-                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
-                    f.savefig(filename)
-                    last28Url = imgurClient.upload_image(filename).link
-                    os.remove(filename)
+                    last28Days = sorted(days.items())[::-1][:28]
+                    title = "Messages by {}, last 28 days".format(statsOf)
+                    dataX = [day[0] for day in last28Days]
+                    dataY = [day[1] for day in last28Days]
+                    last28Url = graphData(dataX, dataY, title)
 
-                    f, ax = plt.subplots(1)
-                    plt.title("Messages in &{}, last 28 days".format(room))
-                    ax.plot([date.fromtimestamp(int(day[0])) for day in last28Days],
-                             [day[1] for day in last28Days])
-                    plt.gcf().autofmt_xdate()
-                    ax.set_ylim(ymin=0)
-                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
-                    f.savefig(filename)
-                    last28Url = imgurClient.upload_image(filename).link
-                    os.remove(filename)
-                    """
+                    messagesAllTime = days.items()
+                    title = "Messages by {}, all time".format(statsOf)
+                    dataX = [day[0] for day in messagesAllTime]
+                    dataY = [day[1] for day in messagesAllTime]
+                    print(len(dataX))
+                    allTimeUrl = graphData(dataX, dataY, title)
 
                     # Get requester's position.
                     position = getPosition(normnick)
@@ -387,8 +389,8 @@ First Message:\t\t\t{}
 Most Recent Message:\t{}
 Average Messages/Day:\t{}
 Busiest Day:\t\t\t\t{}, with {} messages
-Ranking:\t\t\t\t\t{} of {}.""".format(
-                        statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, noOfPosters), message['data']['id'])
+Ranking:\t\t\t\t\t{} of {}.
+{} {}""".format(statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, noOfPosters, allTimeUrl, last28Url), message['data']['id'])
 
                 # If it's roomstats they want, well, let's get cracking!
                 elif message['data']['content'] == '!roomstats':
@@ -426,28 +428,17 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     messagesByDay = c.fetchall()
 
                     # Plot and upload the messages, last 28 days graph
-                    f, ax = plt.subplots(1)
-                    plt.title("Messages in &{}, last 28 days".format(room))
-                    ax.plot([date.fromtimestamp(int(day[0])) for day in last28Days],
-                             [day[1] for day in last28Days])
-                    plt.gcf().autofmt_xdate()
-                    ax.set_ylim(ymin=0)
-                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
-                    f.savefig(filename)
-                    last28Url = imgurClient.upload_image(filename).link
-                    os.remove(filename)
+                    title = "Messages in &{}, last 28 days".format(room)
+                    dataX = [date.fromtimestamp(int(day[0])) for day in last28Days]
+                    dataY = [day[1] for day in last28Days]
+                    last28Url = graphData(dataX, dataY, title)
 
                     # Plot and upload the messages, all time graph
-                    f, ax = plt.subplots(1)
-                    plt.title("Messages in &{}, all time".format(room))
-                    ax.plot([date.fromtimestamp(int(day[0])) for day in messagesByDay],
-                             [day[1] for day in messagesByDay])
-                    plt.gcf().autofmt_xdate()
-                    ax.set_ylim(ymin=0)
-                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
-                    f.savefig(filename)
-                    allTimeUrl = imgurClient.upload_image(filename).link
-                    os.remove(filename)
+                    title = "Messages in &{}, all time".format(room)
+                    dataX = [date.fromtimestamp(int(day[0])) for day in messagesByDay]
+                    print(len(dataX))
+                    dataY = [day[1] for day in messagesByDay]
+                    allTimeUrl = graphData(dataX, dataY, title)
 
                     heimdall.send("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {} {}".format(
                         count, room, messagesToday, perDayLastFourWeeks, 
