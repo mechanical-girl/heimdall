@@ -264,15 +264,22 @@ while True:
         heimdall.connect(args.stealth)
         conn = sqlite3.connect('{}.db'.format(room))
         c = conn.cursor()
+        c.execute('''SELECT count(*) FROM {}'''.format(room))
+        totalMessagesAllTime = c.fetchone()[0] 
         while True:
             conn.commit()
             message = heimdall.parse()
             # If the message is worth storing, we'll store it
+
             if message['type'] == 'send-event' or message['type'] == 'send-reply':
                 insertMessage(message, room, conn, c)
                 updateCount(message['data']['sender']['name'], conn, c)
 
                 if message['type'] == 'send-reply': continue
+
+                #Check if the message is a historical one
+                if totalMessagesAllTime%25000 == 0:
+                    heimdall.send("Congratulations on making the {}th post in &{}!".format(totalMessagesAllTime,room), message['data']['id'])
 
                 #Check if the message has URLs
                 urls = []
