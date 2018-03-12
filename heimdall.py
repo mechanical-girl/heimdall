@@ -200,6 +200,9 @@ while True:
         # Logs and single messages are structured differently.
         if reply['type'] == 'log-reply':
             # Helps keep track of where we are
+            if len(reply['data']['log']) == 0:
+                raise UpdateDone
+
             disp = reply['data']['log'][0]
             print('    ({})[{}] {}'.format(datetime.utcfromtimestamp(disp['time']).strftime("%Y-%m-%d %H:%M"),
                                        disp['sender']['name'].translate(heimdall.non_bmp_map), disp['content'].translate(heimdall.non_bmp_map)))
