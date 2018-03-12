@@ -86,13 +86,6 @@ def nextDay(day):
     oneDay = 60*60*24
     return(int(calendar.timegm(date.fromtimestamp(day).timetuple())+oneDay))
 
-def updateMessageCount(timestamp):
-    day = nextDay(int(timestamp)-60*60*24)
-    if day in messagesPerDay:
-        messagesPerDay[day] += 1
-    else:
-        messagesPerDay[day] = 1
-
 #Catches URLs
 def getUrls(m):
     global urls
@@ -110,12 +103,27 @@ def getPosition(nick):
     normnick = heimdall.normaliseNick(nick)
     position = 0
     while True:
+        position += 1
         result = c.fetchone()
         if result[0] == normnick:
-            return(i)
+            return(position)
             
-    return(position, results)
+    return("unknown")
 
+def graphData(dataX, dataY, title):
+    # Plot and upload the messages, last 28 days graph 
+    f, ax = plt.subplots(1)
+    plt.title(title)
+    ax.plot(dataX, dataY)
+    plt.gcf().autofmt_xdate()
+    ax.xaxis.set_major_locator(plt.MaxNLocator(10))
+    ax.set_ylim(ymin=0)
+    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
+    f.savefig(filename)
+    url = imgurClient.upload_image(filename).link
+    os.remove(filename)
+    return(url)
+    
 with open('imgur.json', 'r') as f:
     imgurClient = pyimgur.Imgur(json.loads(f.read())[0])
 
@@ -262,11 +270,12 @@ while True:
             conn.commit()
             message = heimdall.parse()
             # If the message is worth storing, we'll store it
-            if message['type'] == 'send-event':
-                totalMessagesAllTime += 1
+
+            if message['type'] == 'send-event' or message['type'] == 'send-reply':
                 insertMessage(message, room, conn, c)
                 updateCount(message['data']['sender']['name'], conn, c)
-                updateMessageCount(message['data']['time'])
+
+                if message['type'] == 'send-reply': continue
 
                 #Check if the message is a historical one
                 if totalMessagesAllTime%25000 == 0:
@@ -336,14 +345,12 @@ while True:
                     # In the interest of finding the busiest day, let's do some quick conversion
                     timestamp = datetime.fromtimestamp(earliest[6])
                     days = {}
-                    c.execute('''SELECT * FROM {} WHERE normname IS ?'''.format(room), (normnick,))
-                    datedmessages = c.fetchall()
-                    for mess in datedmessages:
-                        day = datetime.utcfromtimestamp(mess[6]).strftime("%Y-%m-%d")
-                        try:
-                            days[day] += 1
-                        except:
-                            days[day] = 1
+                    c.execute('''SELECT time, COUNT(*) FROM {} WHERE normname IS ? GROUP BY CAST(time / 86400 AS INT)'''.format(room), (normnick,))
+                    dailyMessages = c.fetchall()
+                    days = {}
+                    for mess in dailyMessages:
+                        day = datetime.utcfromtimestamp(mess[0]).strftime("%Y-%m-%d")
+                        days[day] = mess[1]
                     
                     try: messagesToday = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
                     except: messagesToday = 0
@@ -356,11 +363,23 @@ while True:
                     numberOfDays = (datetime.strptime(lastMessageSent, "%Y-%m-%d") - datetime.strptime(firstMessageSent, "%Y-%m-%d")).days
                     if lastMessageSent == datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d"): lastMessageSent = "Today"
                     numberOfDays = numberOfDays if numberOfDays > 0 else 1
+                    
+                    last28Days = sorted(days.items())[::-1][:28]
+                    title = "Messages by {}, last 28 days".format(statsOf)
+                    dataX = [day[0] for day in last28Days]
+                    dataY = [day[1] for day in last28Days]
+                    last28Url = graphData(dataX, dataY, title)
+
+                    messagesAllTime = days.items()
+                    title = "Messages by {}, all time".format(statsOf)
+                    dataX = [day[0] for day in messagesAllTime]
+                    dataY = [day[1] for day in messagesAllTime]
+                    allTimeUrl = graphData(dataX, dataY, title)
 
                     # Get requester's position.
                     position = getPosition(normnick)
                     c.execute('''SELECT count(*) FROM {}posters'''.format(room))
-                    results = c.fetchone()[0]
+                    noOfPosters = c.fetchone()[0]
                     # Collate and send the lot.
                     heimdall.send("""
 User:\t\t\t\t\t{}
@@ -371,8 +390,8 @@ First Message:\t\t\t{}
 Most Recent Message:\t{}
 Average Messages/Day:\t{}
 Busiest Day:\t\t\t\t{}, with {} messages
-Ranking:\t\t\t\t\t{} of {}.""".format(
-                        statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, results, message['data']['id']))
+Ranking:\t\t\t\t\t{} of {}.
+{} {}""".format(statsOf, str(count), messagesToday, numberOfDays, firstMessageSent, earliest[0], lastMessageSent, int(count / numberOfDays), busiestDay[0][0], busiestDay[0][1], position, noOfPosters, allTimeUrl, last28Url), message['data']['id'])
 
                 # If it's roomstats they want, well, let's get cracking!
                 elif message['data']['content'] == '!roomstats':
@@ -410,28 +429,16 @@ Ranking:\t\t\t\t\t{} of {}.""".format(
                     messagesByDay = c.fetchall()
 
                     # Plot and upload the messages, last 28 days graph
-                    f, ax = plt.subplots(1)
-                    plt.title("Messages in &{}, last 28 days".format(room))
-                    ax.plot([date.fromtimestamp(int(day[0])) for day in last28Days],
-                             [day[1] for day in last28Days])
-                    plt.gcf().autofmt_xdate()
-                    ax.set_ylim(ymin=0)
-                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
-                    f.savefig(filename)
-                    last28Url = imgurClient.upload_image(filename).link
-                    os.remove(filename)
+                    title = "Messages in &{}, last 28 days".format(room)
+                    dataX = [date.fromtimestamp(int(day[0])) for day in last28Days]
+                    dataY = [day[1] for day in last28Days]
+                    last28Url = graphData(dataX, dataY, title)
 
                     # Plot and upload the messages, all time graph
-                    f, ax = plt.subplots(1)
-                    plt.title("Messages in &{}, all time".format(room))
-                    ax.plot([date.fromtimestamp(int(day[0])) for day in messagesByDay],
-                             [day[1] for day in messagesByDay])
-                    plt.gcf().autofmt_xdate()
-                    ax.set_ylim(ymin=0)
-                    filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))+".png"
-                    f.savefig(filename)
-                    allTimeUrl = imgurClient.upload_image(filename).link
-                    os.remove(filename)
+                    title = "Messages in &{}, all time".format(room)
+                    dataX = [date.fromtimestamp(int(day[0])) for day in messagesByDay]
+                    dataY = [day[1] for day in messagesByDay]
+                    allTimeUrl = graphData(dataX, dataY, title)
 
                     heimdall.send("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {} {}".format(
                         count, room, messagesToday, perDayLastFourWeeks, 
