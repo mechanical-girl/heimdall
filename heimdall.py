@@ -277,8 +277,7 @@ while True:
             if message['type'] == 'send-event' or message['type'] == 'send-reply':
                 insertMessage(message, room, conn, c)
                 updateCount(message['data']['sender']['name'], conn, c)
-
-                if message['type'] == 'send-reply': continue
+                totalMessagesAllTime += 1
 
                 #Check if the message is a historical one
                 if totalMessagesAllTime%25000 == 0:
