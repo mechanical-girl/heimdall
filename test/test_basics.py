@@ -14,6 +14,7 @@ class TestBasics(unittest.TestCase):
 
     def test_get_position(self):
         self.heimdall.connect_to_database()
+        print(self.heimdall.get_position('Pouncy Silverkitten')
         assert self.heimdall.get_position('Pouncy Silverkitten') == 1
         assert self.heimdall.get_position('ThisUserDoesnaeExist') == "unknown"
 
