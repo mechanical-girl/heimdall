@@ -1,6 +1,6 @@
 from heimdall import Heimdall
 import calendar
-from datetime import date, timetuple
+from datetime import date, timedelta
 import time
 
 class TestBasics:
