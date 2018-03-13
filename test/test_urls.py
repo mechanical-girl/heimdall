@@ -9,17 +9,6 @@ class TestBasics:
 
         self.heimdall = Heimdall('test', False, False)
 
-from heimdall import Heimdall
-import calendar
-import re
-import time
-
-class TestBasics:
-    def setUp(self):
-        from datetime import date, timedelta
-
-        self.heimdall = Heimdall('test', False, False)
-
         self.tomorrow = int(calendar.timegm(date.fromtimestamp(time.time()).timetuple())+(60*60*24))
         self.message_with_urls = (' '.join(['https://www.google.com',
                                             'http://insecure.com/',
