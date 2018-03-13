@@ -289,7 +289,7 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
         with open('possible_rooms.json', 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
 
-    def get_user_stats(self, user, message_id):
+    def get_user_stats(self, user):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
         normnick = self.heimdall.normaliseNick(user)
@@ -351,7 +351,7 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
         self.c.execute('''SELECT count(*) FROM {}posters'''.format(self.room))
         no_of_posters = self.c.fetchone()[0]
         # Collate and send the lot.
-        self.heimdall.send("""
+        return("""
 User:\t\t\t\t\t{}
 Messages:\t\t\t\t{}
 Messages Sent Today:\t\t{}
@@ -361,7 +361,7 @@ Most Recent Message:\t{}
 Average Messages/Day:\t{}
 Busiest Day:\t\t\t\t{}, with {} messages
 Ranking:\t\t\t\t\t{} of {}.
-{} {}""".format(user, count, messages_today, number_of_days, first_message_sent, earliest[0], last_message_sent, int(count / number_of_days), busiest_day[0], busiest_day[1], position, no_of_posters, all_time_url, last_28_url), message_id)
+{} {}""".format(user, count, messages_today, number_of_days, first_message_sent, earliest[0], last_message_sent, int(count / number_of_days), busiest_day[0], busiest_day[1], position, no_of_posters, all_time_url, last_28_url))
 
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
@@ -410,10 +410,10 @@ Ranking:\t\t\t\t\t{} of {}.
 
         return("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {} {}".format(count, self.room, messages_today, per_day_last_four_weeks, busiest[0], busiest[1], top_ten, all_time_url, last_28_url))
 
-    def get_rank_of_user(self, user, message_id):
+    def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
         position = self.get_position(user)
-        self.heimdall.send("Position {}".format(position), message_id)
+        return("Position {}".format(position))
 
     def get_parse_message(self):
         self.conn.commit()
@@ -432,18 +432,18 @@ Ranking:\t\t\t\t\t{} of {}.
             if comm[0][0] == "!":
                 if comm[0] == "!stats":
                     if len(comm) > 1 and comm[1][0] == "@":
-                        self.get_user_stats(comm[1][1:], message['data']['id'])
+                        self.heimdall.send(self.get_user_stats(comm[1][1:]), message['data']['id'])
                     else:
-                        self.get_user_stats(message['data']['sender']['name'], message['data']['id'])
+                        self.heimdall.send(self.get_user_stats(message['data']['sender']['name']), message['data']['id'])
 
                 elif comm[0] == "!roomstats":
                     self.heimdall.send(self.get_room_stats(), message['data']['id'])
                 
                 elif comm[0] == "!rank":
                     if len(comm) > 1 and comm[0][1] == "@":
-                        self.get_rank_of_user(comm[1][1:], message['data']['id'])
+                        self.heimdall.send(self.get_rank_of_user(comm[1][1:]), message['data']['id'])
                     else:
-                        self.get_rank_of_user(message['data']['sender']['name'], message['data']['id'])
+                        self.heimdall.send(self.get_rank_of_user(message['data']['sender']['name']), message['data']['id'])
 
     def main(self):
         """Main loop"""
