@@ -13,7 +13,6 @@ karelia = {git = "https://github.com/pouncysilverkitten/karelia"}
 numpy = "*"
 matplotlib = "*"
 pyimgur = "*"
-nose = "*"
 coverage = "*"
 coverage-badge = "*"
 

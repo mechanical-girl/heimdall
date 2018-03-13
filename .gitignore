@@ -6,3 +6,4 @@ Pipfile.lock
 __pycache__/*
 __pycache__
 test/__pycache__
+*.svg

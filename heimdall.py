@@ -263,6 +263,9 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         while True:
             position += 1
             result = self.c.fetchone()
+            if result == None:
+                return("unknown")
+
             if result[0] == normnick:
                 return(position)
             

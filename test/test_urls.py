@@ -1,7 +1,8 @@
+import unittest
 from heimdall import Heimdall
 import re
 
-class TestBasics:
+class TestUrls(unittest.TestCase):
     def setUp(self):
 
         self.heimdall = Heimdall('test', False, False)
@@ -21,9 +22,6 @@ class TestBasics:
                                             'sub.insecure.com', 
                                             'wiki.archlinux.org/index.php/arch_linux'])
         self.message_without_urls = 'This messages discusses the http and https:// standards, the merits of the www. prefix, the .com and .biz TLDs, and sub.domains of websites with .php and.html files.'
-
-    def tearDown(self):
-        pass
 
     def test_url_stripping(self):
         assert self.heimdall.get_urls(self.message_with_urls[0]) == self.message_with_urls[1]
