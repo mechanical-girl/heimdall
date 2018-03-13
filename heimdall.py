@@ -260,15 +260,28 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
             position += 1
             result = self.c.fetchone()
             if result == None:
-                return("unknown")
-
+                break
             if result[0] == normnick:
                 return(position)
             
         return("unknown")
 
-    #def get_user_at_position(self, position):
+    def get_user_at_position(self, position):
+        """Returns the user at the specified position"""
+        self.c.execute('''SELECT sendername FROM (SELECT sendername, normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(self.room))
 
+        # Check to see they've passed a number
+        try:
+            position = int(position)
+        except:
+            return("The position you specified was invalid.")
+
+        # In case they pass a number larger than the number of users
+        try:
+            for i in range(position): name = self.c.fetchone()[0]
+        except:
+            return("You requested a position which doesn't exist. There have been {} uniquely-named posters in &{}.".format(i, self.room))
+        return("The user at position {} is {}".format(position, name))
 
     def graph_data(self, data_x, data_y, title):
         """Graphs the data passed to it and returns a graph"""
@@ -360,7 +373,7 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
 
         # Get requester's position.
         position = self.get_position(normnick)
-        self.c.execute('''SELECT count(*) FROM {}posters'''.format(self.room))
+        self.c.execute('''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(self.room))
         no_of_posters = self.c.fetchone()[0]
         # Collate and send the lot.
         return("""
@@ -455,6 +468,8 @@ Ranking:\t\t\t\t\t{} of {}.
                 elif comm[0] == "!rank":
                     if len(comm) > 1 and comm[0][1] == "@":
                         self.heimdall.send(self.get_rank_of_user(comm[1][1:]), message['data']['id'])
+                    elif len(comm) > 1:
+                        self.heimdall.send(self.get_user_at_position(comm[1]), message['data']['id'])
                     else:
                         self.heimdall.send(self.get_rank_of_user(message['data']['sender']['name']), message['data']['id'])
 
