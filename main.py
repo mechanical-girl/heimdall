@@ -81,17 +81,13 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
         self.show(' done in {} seconds\nConnecting to database...'.format(round(time.time()-self.start_time, 2)), end='')
 
         self.start_time = time.time()
-        self.conn = sqlite3.connect('{}.db'.format(self.room))
-        self.c = self.conn.cursor()
+        self.connect_to_database()
         self.check_or_create_tables()
         self.show(' done in {} seconds.\nPulling logs...'.format(round(time.time()-self.start_time, 2)))
 
         self.start_time = time.time()
         self.get_room_logs()
 
-        self.show('Done in {} seconds\nAdding nicks to table...'.format(round(time.time()-self.start_time, 2)), end='')
-        self.conn.commit()
-        
         self.c.execute('''SELECT COUNT(*) FROM {}'''.format(self.room))
         self.total_messages_all_time = self.c.fetchone()[0]
 
@@ -99,6 +95,10 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
 
         self.show("Ready")
         self.heimdall.disconnect()
+
+    def connect_to_database(self):
+        self.conn = sqlite3.connect('{}.db'.format(self.room))
+        self.c = self.conn.cursor()
 
     def get_imgur_key(self):
         """Returns imgur API key from file"""
@@ -126,20 +126,6 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
             self.c.execute('''CREATE UNIQUE INDEX messageID ON {}(id)'''.format(self.room))
         except sqlite3.OperationalError:
             self.show(' existing tables found...', end='')
-        try:
-            self.c.execute('''   CREATE TABLE {}posters(
-                            name text,
-                            normname text,
-                            count real
-                           )'''.format(self.room))
-            self.c.execute('''CREATE UNIQUE INDEX normname ON {}posters(normname)'''.format(self.room))
-            self.conn.commit()
-        except sqlite3.OperationalError: pass
-        try:
-            self.c.execute('''CREATE TABLE rooms(name text, password integer)''')
-            self.c.execute('''CREATE UNIQUE INDEX name ON rooms(name)''')
-            self.conn.commit()
-        except sqlite3.OperationalError: pass
 
     def get_room_logs(self):
         """Create or update logs of the room.
@@ -153,7 +139,6 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
         has length less than 1000, indicating that the end of the room's
         history has been reached.
         """
-        self.names = set()
         self.heimdall.send({'type': 'log', 'data': {'n': 1000}})
 
         while True:
@@ -186,7 +171,7 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
                                         message['sender']['id'], message['sender']['name'],
                                         self.heimdall.normaliseNick(message['sender']['name']),
                                         message['time']))
-                        self.names.add(message['sender']['name'])
+
                     # Attempts to insert all the messages in bulk. If it fails, it will
                     # break out of the loop and we will assume that the logs are now
                     # up to date.
@@ -204,6 +189,7 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
                     self.insert_message(reply)
         
             except UpdateDone:
+                self.conn.commit()
                 break
 
     def insert_message(self, message):
@@ -245,7 +231,8 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
         response = ""
         known_urls = [  'imgur.com',
                         'google.com']
-        urls = [url for url in re.findall(self.url_regex, content) if not url in '\n'.join(known_urls)]
+        urls = re.findall(self.url_regex, content)
+        urls = [url[0] for url in urls if not url[0] in '\n'.join(known_urls)]
         if len(urls) > 0:
             for match in urls:
                 try:
@@ -296,9 +283,10 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
     def look_for_room_links(self, content):
         """Looks for and saves all possible rooms in message"""
         new_possible_rooms = set([room[1:] for room in content.split() if room[0] == '&'])
-        with open('possible_rooms.json', 'r+') as f:
+        with open('possible_rooms.json', 'r') as f:
             possible_rooms = set(json.loads(f.read()))
-            possible_rooms.union(new_possible_rooms)
+        possible_rooms.union(new_possible_rooms)
+        with open('possible_rooms.json', 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
 
     def get_user_stats(self, user, message_id):
@@ -311,7 +299,7 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
         count = self.c.fetchone()[0]
 
         if count == 0:
-            self.heimdall.send('User @{} not found.'.format(user), message_id['data']['id'])
+            self.heimdall.send('User @{} not found.'.format(user), message_id)
             return
 
         # Query gets the earliest message sent
@@ -375,13 +363,13 @@ Busiest Day:\t\t\t\t{}, with {} messages
 Ranking:\t\t\t\t\t{} of {}.
 {} {}""".format(user, count, messages_today, number_of_days, first_message_sent, earliest[0], last_message_sent, int(count / number_of_days), busiest_day[0], busiest_day[1], position, no_of_posters, all_time_url, last_28_url), message_id)
 
-    def get_room_stats(self, message_id):
+    def get_room_stats(self):
         """Gets and sends stats for rooms"""
         self.c.execute('''SELECT count(*) FROM {}'''.format(self.room))
         count = self.c.fetchone()[0]
 
         # Calculate top ten posters of all time
-        self.c.execute('''SELECT * FROM {}posters ORDER BY count DESC LIMIT 10'''.format(self.room))
+        self.c.execute('''SELECT sendername,normname,COUNT(normname) AS freq FROM {} GROUP BY sendername ORDER BY freq DESC LIMIT 10'''.format(self.room))
         results = self.c.fetchall()
         top_ten = ""
         for i, result in enumerate(results):
@@ -420,12 +408,12 @@ Ranking:\t\t\t\t\t{} of {}.
         all_time_file = self.save_graph(all_time_graph)
         all_time_url = self.upload_and_delete_graph(all_time_file)
 
-        self.heimdall.send("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {} {}".format(count, self.room, messages_today, per_day_last_four_weeks, busiest[0], busiest[1], top_ten, all_time_url, last_28_url), message_id)
+        return("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n {} {}".format(count, self.room, messages_today, per_day_last_four_weeks, busiest[0], busiest[1], top_ten, all_time_url, last_28_url))
 
     def get_rank_of_user(self, user, message_id):
         """Gets and sends the position of the supplied user"""
         position = self.get_position(user)
-        self.heimdall.find(str(int(position)), message_id)
+        self.heimdall.send("Position {}".format(position), message_id)
 
     def get_parse_message(self):
         self.conn.commit()
@@ -438,18 +426,18 @@ Ranking:\t\t\t\t\t{} of {}.
                 self.heimdall.send("Congratulations on making the {}th post in &{}!".format(self.total_messages_all_time, self.room), message['data']['id'])
 
             self.look_for_room_links(message['data']['content'])
-            self.get_urls(message['data']['content'])
+            self.heimdall.send(self.get_urls(message['data']['content']),message['data']['id'])
 
             comm = message['data']['content'].split()
             if comm[0][0] == "!":
                 if comm[0] == "!stats":
                     if len(comm) > 1 and comm[1][0] == "@":
-                        self.get_user_stats(comm[1][0])
+                        self.get_user_stats(comm[1][1:], message['data']['id'])
                     else:
                         self.get_user_stats(message['data']['sender']['name'], message['data']['id'])
 
-                elif comm[0][0] == "!roomstats":
-                    self.get_room_stats(message['data']['id'])
+                elif comm[0] == "!roomstats":
+                    self.heimdall.send(self.get_room_stats(), message['data']['id'])
                 
                 elif comm[0] == "!rank":
                     if len(comm) > 1 and comm[0][1] == "@":
@@ -459,17 +447,17 @@ Ranking:\t\t\t\t\t{} of {}.
 
     def main(self):
         """Main loop"""
-        while True:
-            try:
-                self.conn.connect()
-                self.heimdall.commit()
+        try:
+            self.heimdall.connect()
+            self.connect_to_database()
+            while True:
                 self.get_parse_message()
-            except Exception:
-                self.heimdall.log()
-                self.conn.close()
-                self.heimdall.disconnect()
-            finally:
-                time.sleep(1)
+        except Exception:
+            self.heimdall.log()
+            self.conn.close()
+            self.heimdall.disconnect()
+        finally:
+            time.sleep(1)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -484,7 +472,6 @@ def main():
 
     def onSIGINT(signum, frame):
         """Handles sigints"""
-    
         try:
             heimdall.conn.commit()
             heimdall.conn.close()
@@ -492,8 +479,9 @@ def main():
             sys.exit()
 
     signal.signal(signal.SIGINT, onSIGINT)
-
-    heimdall.main()
+    
+    while True:
+        heimdall.main()
 
 if __name__ == '__main__':
     main()
