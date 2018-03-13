@@ -46,10 +46,11 @@ class Heimdall:
     produce statistic readouts on demand.
     """
 
-    def __init__(self, room, stealth, verbosity):
+    def __init__(self, room, stealth, verbosity, tests = False):
         self.room = room
         self.stealth = stealth
         self.verbose = verbosity
+        self.tests = tests
         self.heimdall = karelia.newBot('Heimdall', self.room)
         
         self.heimdall.stockResponses['shortHelp'] = "/me is a stats and logging bot"
@@ -74,19 +75,12 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         except Exception:
             self.show("Could not find imgur key...")
 
-        self.start_time = time.time()
-        
-        self.show("Connecting to euphoria...", end='')
         self.heimdall.connect(self.stealth)
-        self.show(' done in {} seconds\nConnecting to database...'.format(round(time.time()-self.start_time, 2)), end='')
 
-        self.start_time = time.time()
         self.connect_to_database()
         self.check_or_create_tables()
-        self.show(' done in {} seconds.\nPulling logs...'.format(round(time.time()-self.start_time, 2)))
 
-        self.start_time = time.time()
-        self.get_room_logs()
+        if not self.tests: self.get_room_logs()
 
         self.c.execute('''SELECT COUNT(*) FROM {}'''.format(self.room))
         self.total_messages_all_time = self.c.fetchone()[0]

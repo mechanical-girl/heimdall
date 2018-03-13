@@ -5,7 +5,7 @@ import re
 class TestUrls(unittest.TestCase):
     def setUp(self):
 
-        self.heimdall = Heimdall('test', False, False)
+        self.heimdall = Heimdall('test', False, False, True)
 
         self.message_with_urls = (' '.join(['https://www.google.com',
                                             'http://insecure.com/',
