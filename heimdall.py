@@ -75,7 +75,8 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         except Exception:
             self.show("Could not find imgur key...")
 
-        self.heimdall.connect(self.stealth)
+        if not self.tests:
+            self.heimdall.connect(self.stealth)
 
         self.connect_to_database()
         self.check_or_create_tables()
@@ -88,7 +89,8 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         self.conn.close()
 
         self.show("Ready")
-        self.heimdall.disconnect()
+        if not self.tests:
+            self.heimdall.disconnect()
 
     def connect_to_database(self):
         self.conn = sqlite3.connect('{}.db'.format(self.room))
