@@ -1,3 +1,6 @@
+import argparse
+import signal
+import sys
 from heimdall import Heimdall
 
 def main():
