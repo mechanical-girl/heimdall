@@ -6,3 +6,4 @@ install:
         - pipenv install
 script:
         - pipenv run nosetests
+        - pipenv run coverage-badge -o coverage
