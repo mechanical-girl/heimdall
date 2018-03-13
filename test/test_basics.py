@@ -1,4 +1,7 @@
 from heimdall import Heimdall
+import calendar
+from datetime import date, timetuple
+import time
 
 class TestBasics:
     def setUp(self):
@@ -11,4 +14,5 @@ class TestBasics:
     def get_position(self):
         assert self.heimdall.get_position('Pouncy Silverkitten') == 1
         assert self.heimdall.get_position('ThisUserDoesnaeExist') == "unknown"
-    
+
+
