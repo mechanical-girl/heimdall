@@ -5,5 +5,5 @@ install:
         - pip install pipenv
         - pipenv install
 script:
-        - pipenv run nosetests
+        - pipenv run nosetests --with-coverage --cover-erase --cover-package=heimdall --cover-html
         - pipenv run coverage-badge -o coverage
