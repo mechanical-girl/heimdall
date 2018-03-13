@@ -7,7 +7,6 @@ curiosity, it should be able to track the movements of spammers and other
 known-problematic individuals.
 """
 
-import argparse
 import calendar
 import codecs
 import html
@@ -16,10 +15,8 @@ import operator
 import os
 import random
 import re
-import signal
 import sqlite3
 import string
-import sys
 import time
 import urllib.request
 
@@ -57,19 +54,19 @@ class Heimdall:
         
         self.heimdall.stockResponses['shortHelp'] = "/me is a stats and logging bot"
         self.heimdall.stockResponses['longHelp'] = """
-I am Heimdall, the one who watches. I see you. To invoke me powers:
+I am Heimdall, the one who watches. I see you. To invoke my powers:
 
-    !stats will return a set of statistics about the one who summons me
-    !stats @user shall direct my gaze upon @user instead
+ -!stats will return a set of statistics about the one who summons me
+ -!stats @user shall direct my gaze upon @user instead
 
-    !rank shall cause me to say where you do stand in the ranking of our citizens
-    !rank @user shall again direct my gaze upon @user
+ -!rank shall cause me to say where you do stand in the ranking of our citizens
+ -!rank @user shall again direct my gaze upon @user
 
-    !roomstats causes me to ponder the fine and worthy history of &{}
+ -!roomstats causes me to ponder the fine and worthy history of &{}
     
-    I am watched over by the one known as Pouncy Silverkitten, and my inner workings may be seen at https://github.com/PouncySilverkitten/heimdall
+I am watched over by the one known as Pouncy Silverkitten, and my inner workings may be seen at https://github.com/PouncySilverkitten/heimdall
     """.format(self.room)
-        self.url_regex = r"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>\[\]]+|\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\))+(?:\(([^\s()<>\[\]]+|(\([^\s()<>\[\]]+\)))*\)|[^\s`!(){};:'".,<>?\[\]]))"""
+        self.url_regex = r"""(?i)\b((?:https?:(?:/{1,3}|[a-z0-9%])|[a-z0-9.\-]+[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)/)(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’])|(?:(?<!@)[a-z0-9]+(?:[.\-][a-z0-9]+)*[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)\b/?(?!@)))"""
 
         self.get_imgur_key()
         self.imgur_client = pyimgur.Imgur(self.imgur_key)
@@ -228,11 +225,21 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
         each, truncating it if necessary, and returning a string 
         containing them all.
         """
-        response = ""
         known_urls = [  'imgur.com',
-                        'google.com']
-        urls = re.findall(self.url_regex, content)
-        urls = [url[0] for url in urls if not url[0] in '\n'.join(known_urls)]
+                        'google.com',
+                        'github.com/PouncySilverkitten']
+
+        urls = [url for url in re.findall(self.url_regex, content)]
+        ret_urls = []
+        for url in urls:
+            for known_url in known_urls:
+                if known_url in url:
+                    ret_urls.append(url)
+
+        return([url for url in urls if not url in ret_urls])
+
+    def get_page_titles(self, urls):
+        response = ""
         if len(urls) > 0:
             for match in urls:
                 try:
@@ -240,12 +247,12 @@ I am Heimdall, the one who watches. I see you. To invoke me powers:
                     title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
                     title = html.unescape(codecs.decode(title, 'unicode_escape')).strip()
                     clear_title = title if len(title) <= 75 else '{}...'.format(title[0:72].strip())
-                    response += "Title: {} \n".format(clear_title)
+                    response += "Title: {}\n".format(clear_title)
                 except: pass
 
         return response
 
-    def get_position(self, nick):
+    def get_position(self, position):
         """Returns the rank the supplied nick has by number of messages"""
         self.c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(self.room))
         normnick = self.heimdall.normaliseNick(nick)
@@ -426,7 +433,8 @@ Ranking:\t\t\t\t\t{} of {}.
                 self.heimdall.send("Congratulations on making the {}th post in &{}!".format(self.total_messages_all_time, self.room), message['data']['id'])
 
             self.look_for_room_links(message['data']['content'])
-            self.heimdall.send(self.get_urls(message['data']['content']),message['data']['id'])
+            urls = self.get_urls(message['data']['content'])
+            self.heimdall.send(self.get_page_titles(urls),message['data']['id'])
 
             comm = message['data']['content'].split()
             if comm[0][0] == "!":
