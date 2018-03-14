@@ -46,10 +46,11 @@ class Heimdall:
     produce statistic readouts on demand.
     """
 
-    def __init__(self, room, stealth, verbosity):
+    def __init__(self, room, stealth, verbosity, tests = False):
         self.room = room
         self.stealth = stealth
         self.verbose = verbosity
+        self.tests = tests
         self.heimdall = karelia.newBot('Heimdall', self.room)
         
         self.heimdall.stockResponses['shortHelp'] = "/me is a stats and logging bot"
@@ -74,19 +75,13 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         except Exception:
             self.show("Could not find imgur key...")
 
-        self.start_time = time.time()
-        
-        self.show("Connecting to euphoria...", end='')
-        self.heimdall.connect(self.stealth)
-        self.show(' done in {} seconds\nConnecting to database...'.format(round(time.time()-self.start_time, 2)), end='')
+        if not self.tests:
+            self.heimdall.connect(self.stealth)
 
-        self.start_time = time.time()
         self.connect_to_database()
         self.check_or_create_tables()
-        self.show(' done in {} seconds.\nPulling logs...'.format(round(time.time()-self.start_time, 2)))
 
-        self.start_time = time.time()
-        self.get_room_logs()
+        if not self.tests: self.get_room_logs()
 
         self.c.execute('''SELECT COUNT(*) FROM {}'''.format(self.room))
         self.total_messages_all_time = self.c.fetchone()[0]
@@ -94,7 +89,8 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         self.conn.close()
 
         self.show("Ready")
-        self.heimdall.disconnect()
+        if not self.tests:
+            self.heimdall.disconnect()
 
     def connect_to_database(self):
         self.conn = sqlite3.connect('{}.db'.format(self.room))
@@ -263,13 +259,30 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         while True:
             position += 1
             result = self.c.fetchone()
+            if result == None:
+                break
             if result[0] == normnick:
                 return(position)
             
         return("unknown")
 
-    #def get_user_at_position(self, position):
+    def get_user_at_position(self, position):
+        """Returns the user at the specified position"""
+        self.c.execute('''SELECT sendername FROM (SELECT sendername, normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(self.room))
 
+        # Check to see they've passed a number
+        try:
+            position = int(position)
+            assert position != 0
+        except:
+            return("The position you specified was invalid.")
+
+        # In case they pass a number larger than the number of users
+        try:
+            for i in range(position): name = self.c.fetchone()[0]
+        except:
+            return("You requested a position which doesn't exist. There have been {} uniquely-named posters in &{}.".format(i, self.room))
+        return("The user at position {} is {}".format(position, name))
 
     def graph_data(self, data_x, data_y, title):
         """Graphs the data passed to it and returns a graph"""
@@ -361,7 +374,7 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
 
         # Get requester's position.
         position = self.get_position(normnick)
-        self.c.execute('''SELECT count(*) FROM {}posters'''.format(self.room))
+        self.c.execute('''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(self.room))
         no_of_posters = self.c.fetchone()[0]
         # Collate and send the lot.
         return("""
@@ -454,8 +467,10 @@ Ranking:\t\t\t\t\t{} of {}.
                     self.heimdall.send(self.get_room_stats(), message['data']['id'])
                 
                 elif comm[0] == "!rank":
-                    if len(comm) > 1 and comm[0][1] == "@":
+                    if len(comm) > 1 and comm[1][0] == "@":
                         self.heimdall.send(self.get_rank_of_user(comm[1][1:]), message['data']['id'])
+                    elif len(comm) > 1:
+                        self.heimdall.send(self.get_user_at_position(comm[1]), message['data']['id'])
                     else:
                         self.heimdall.send(self.get_rank_of_user(message['data']['sender']['name']), message['data']['id'])
 
