@@ -15,6 +15,7 @@ matplotlib = "*"
 pyimgur = "*"
 coverage = "*"
 coverage-badge = "*"
+unittest-xml-reporting = "*"
 
 
 [dev-packages]

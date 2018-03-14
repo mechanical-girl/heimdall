@@ -273,6 +273,7 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         # Check to see they've passed a number
         try:
             position = int(position)
+            assert position != 0
         except:
             return("The position you specified was invalid.")
 
@@ -466,7 +467,7 @@ Ranking:\t\t\t\t\t{} of {}.
                     self.heimdall.send(self.get_room_stats(), message['data']['id'])
                 
                 elif comm[0] == "!rank":
-                    if len(comm) > 1 and comm[0][1] == "@":
+                    if len(comm) > 1 and comm[1][0] == "@":
                         self.heimdall.send(self.get_rank_of_user(comm[1][1:]), message['data']['id'])
                     elif len(comm) > 1:
                         self.heimdall.send(self.get_user_at_position(comm[1]), message['data']['id'])
