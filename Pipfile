@@ -16,6 +16,8 @@ pyimgur = "*"
 coverage = "*"
 coverage-badge = "*"
 unittest-xml-reporting = "*"
+idna = "*"
+urlextract = "*"
 
 
 [dev-packages]

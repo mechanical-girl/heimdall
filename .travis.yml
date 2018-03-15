@@ -6,5 +6,3 @@ install:
         - pipenv install
 script:
         - pipenv run coverage run -m unittest discover -s test/ -vv
-        - rm coverage.svg
-        - pipenv run coverage-badge -o coverage

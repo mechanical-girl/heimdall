@@ -25,6 +25,8 @@ from datetime import time as dttime
 
 import matplotlib.pyplot as plt
 
+from urlextract import URLExtract
+
 import pyimgur
 
 import karelia
@@ -52,31 +54,63 @@ class Heimdall:
         self.verbose = verbosity
         self.tests = tests
         self.heimdall = karelia.newBot('Heimdall', self.room)
+       
+        self.files = {'regex': 'regex', 'possible_rooms': 'possible_rooms.json', 'help_text': 'help_text.json', 'block_list': 'block_list.json', 'imgur': 'imgur.json'}
+        for key in self.files:
+            try:
+                if self.files[key].endswith('.json'):
+                    with open(self.files[key], 'r') as f:
+                        json.loads(f.read())
+            except:
+                self.show('Unable to find file {}, creating (This will need to be manually edited before Heimdall can run successfully)'.format(self.files[key]))
+                with open(self.files[key], 'w') as f:
+                    f.write('[]')
+
+        with open(self.files['help_text'], 'r') as f:
+            try:
+                help_text = json.loads(f.read())
+                self.heimdall.stockResponses['shortHelp'] = help_text['short_help']
+                self.heimdall.stockResponses['longHelp'] = help_text['long_help'].format(self.room)
+            except Exception:
+                self.heimdall.log()
+                self.show("Error creating help text - see 'Heimdall &{}.log' for details.".format(self.room))
+
+        with open(self.files['regex'], 'r') as f:
+            try:
+                self.url_regex = f.read()
+            except:
+                self.heimdall.log()
+                self.show("Error reading url regex - see 'Heimdall &{}.log' for details.".format(self.room))
         
-        self.heimdall.stockResponses['shortHelp'] = "/me is a stats and logging bot"
-        self.heimdall.stockResponses['longHelp'] = """
-I am Heimdall, the one who watches. I see you. To invoke my powers:
+        with open(self.files['imgur'], 'r') as f:
+            try:
+                self.imgur_key = json.loads(f.read())[0]
+                self.imgur_client = pyimgur.Imgur(self.imgur_key)
+            except Exception:
+                self.heimdall.log()
+                self.show("Error reading imgur key - see 'Heimdall &{}.log' for details.".format(self.room))
 
- -!stats will return a set of statistics about the one who summons me
- -!stats @user shall direct my gaze upon @user instead
+        with open(self.files['block_list'], 'r+') as f:
+            try:
+                block_domains = json.loads(f.read())
+                if self.room in block_domains:
+                    self.block_domains = block_domains[self.room]
+                else:
+                    self.show("No block list found for this room - cloning from master.")
+                    self.block_domains = block_domains['master'][:]
+                    block_domains[self.room] = self.block_domains[:]
+                    f.seek(0)
+                    f.truncate()
+                    f.write(json.dumps(block_domains))
 
- -!rank shall cause me to say where you do stand in the ranking of our citizens
- -!rank @user shall again direct my gaze upon @user
-
- -!roomstats causes me to ponder the fine and worthy history of &{}
-    
-I am watched over by the one known as Pouncy Silverkitten, and my inner workings may be seen at https://github.com/PouncySilverkitten/heimdall
-    """.format(self.room)
-        self.url_regex = r"""(?i)\b((?:https?:(?:/{1,3}|[a-z0-9%])|[a-z0-9.\-]+[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)/)(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’])|(?:(?<!@)[a-z0-9]+(?:[.\-][a-z0-9]+)*[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)\b/?(?!@)))"""
-
-        try:
-            self.get_imgur_key()
-            self.imgur_client = pyimgur.Imgur(self.imgur_key)
-        except Exception:
-            self.show("Could not find imgur key...")
+            except:
+                self.heimdall.log()
+                self.show("Error reading block list - see 'Heimdall &{}.log' for details.".format(self.room))
 
         if not self.tests:
             self.heimdall.connect(self.stealth)
+
+        self.extractor = URLExtract()
 
         self.connect_to_database()
         self.check_or_create_tables()
@@ -95,11 +129,6 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
     def connect_to_database(self):
         self.conn = sqlite3.connect('{}.db'.format(self.room))
         self.c = self.conn.cursor()
-
-    def get_imgur_key(self):
-        """Returns imgur API key from file"""
-        with open('imgur.json', 'r') as f:
-            self.imgur_key = json.loads(f.read())[0]
 
     def show(self, text, end='\n'):
         """Only print if self.verbose"""
@@ -224,18 +253,15 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         each, truncating it if necessary, and returning a string 
         containing them all.
         """
-        known_urls = [  'imgur.com',
-                        'google.com',
-                        'github.com/PouncySilverkitten']
-
-        urls = [url for url in re.findall(self.url_regex, content)]
-        ret_urls = []
+        
+        urls = self.extractor.find_urls(content)
+        known_urls = []
         for url in urls:
-            for known_url in known_urls:
+            for known_url in self.block_domains:
                 if known_url in url:
-                    ret_urls.append(url)
+                    known_urls.append(url)
 
-        return([url for url in urls if not url in ret_urls])
+        return([url for url in urls if not url in known_urls])
 
     def get_page_titles(self, urls):
         response = ""
