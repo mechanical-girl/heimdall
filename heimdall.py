@@ -25,6 +25,8 @@ from datetime import time as dttime
 
 import matplotlib.pyplot as plt
 
+from urlextract import URLExtract
+
 import pyimgur
 
 import karelia
@@ -56,8 +58,9 @@ class Heimdall:
         self.files = {'regex': 'regex', 'possible_rooms': 'possible_rooms.json', 'help_text': 'help_text.json', 'block_list': 'block_list.json', 'imgur': 'imgur.json'}
         for key in self.files:
             try:
-                with open(self.files[key], 'r') as f:
-                    json.loads(f.read())
+                if self.files[key].endswith('.json'):
+                    with open(self.files[key], 'r') as f:
+                        json.loads(f.read())
             except:
                 self.show('Unable to find file {}, creating (This will need to be manually edited before Heimdall can run successfully)'.format(self.files[key]))
                 with open(self.files[key], 'w') as f:
@@ -96,7 +99,8 @@ class Heimdall:
                     self.show("No block list found for this room - cloning from master.")
                     self.block_domains = block_domains['master'][:]
                     block_domains[self.room] = self.block_domains[:]
-                    f.truncate(0)
+                    f.seek(0)
+                    f.truncate()
                     f.write(json.dumps(block_domains))
 
             except:
@@ -105,6 +109,8 @@ class Heimdall:
 
         if not self.tests:
             self.heimdall.connect(self.stealth)
+
+        self.extractor = URLExtract()
 
         self.connect_to_database()
         self.check_or_create_tables()
@@ -247,11 +253,12 @@ class Heimdall:
         each, truncating it if necessary, and returning a string 
         containing them all.
         """
-
-        urls = [url for url in re.findall(self.url_regex, content)]
+        
+        
+        urls = self.extractor.find_urls(content)
         known_urls = []
         for url in urls:
-            for known_url in self.block_list:
+            for known_url in self.block_domains:
                 if known_url in url:
                     known_urls.append(url)
 
