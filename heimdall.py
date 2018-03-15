@@ -52,7 +52,12 @@ class Heimdall:
         self.room = room
         self.stealth = stealth
         self.verbose = verbosity
-        self.tests = tests
+        if room == 'test':
+            self.tests = True
+            self.database = 'test.db'
+        else:
+            self.tests = tests
+            self.database = 'logs.db'
         self.heimdall = karelia.newBot('Heimdall', self.room)
        
         self.files = {'regex': 'regex', 'possible_rooms': 'possible_rooms.json', 'help_text': 'help_text.json', 'block_list': 'block_list.json', 'imgur': 'imgur.json'}
@@ -127,10 +132,10 @@ class Heimdall:
             self.heimdall.disconnect()
 
     def connect_to_database(self):
-        self.conn = sqlite3.connect('{}.db'.format(self.room))
+        self.conn = sqlite3.connect(self.database)
         self.c = self.conn.cursor()
 
-    def show(self, text, end='\n'):
+    def show(self, text, end=''):
         """Only print if self.verbose"""
         if self.verbose:
             print(text, end)
