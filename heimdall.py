@@ -226,6 +226,7 @@ I am watched over by the one known as Pouncy Silverkitten, and my inner workings
         """
         known_urls = [  'imgur.com',
                         'google.com',
+                        'youtube.com',
                         'github.com/PouncySilverkitten']
 
         urls = [url for url in re.findall(self.url_regex, content)]
