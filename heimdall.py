@@ -254,7 +254,6 @@ class Heimdall:
         containing them all.
         """
         
-        
         urls = self.extractor.find_urls(content)
         known_urls = []
         for url in urls:
