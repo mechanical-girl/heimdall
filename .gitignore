@@ -6,3 +6,6 @@ Pipfile.lock
 __pycache__/*
 __pycache__
 test/__pycache__
+!block_list.json
+!help_text.json
+
