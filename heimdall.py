@@ -21,6 +21,8 @@ import string
 import time
 import urllib.request
 
+matplotlib.use('Agg')
+
 from datetime import datetime, timedelta, date
 from datetime import time as dttime
 
