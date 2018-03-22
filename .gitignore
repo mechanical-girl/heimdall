@@ -8,4 +8,4 @@ __pycache__
 test/__pycache__
 !block_list.json
 !help_text.json
-
+!test_data.db
