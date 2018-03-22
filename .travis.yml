@@ -11,8 +11,6 @@ deploy:
   strategy: git
   api_key:
     secure: E52bjXVvZoP+Hy9xkz4t2WkaZIOHsSGLhxgjblPnAAAuk1LSAAYZPav/a7JlysghTcTLF0r3t8VvOMK8r5YBZsnvZzpPelplv/EGDMojbsNqB7auNCZScxsmPPUB9OeVbFWEHLL7W/RuvtIOc2y/Ydlao25/v4cWROKQfEqNzuDEe9dWJKrdiCFQdJangrudnO5ieI//0cbLuzsrUzaCRBuq5iBj3VD7wPhuopZQ2HzMK9oCEJV9gmItRXeyFRwUvc2WPxonuWrmSWb4X3wp+dD6bh5BFoPKSQVuiG6fTCVOBJzByprE1B/9WhCAfvVNG4NMxdEY0mkCTY2ylP2ThQ+ktKAFQIvqWFNn4Gcy7OlnNjpC22ZcL4vdcipq+rb3fsqvlyDiZEh3jILmvDWgXu/4E7hF+A4EhckGSMFc/yrIqOTDFb44QWRzE/Gbwzy31ZVrGNWIUEqVAfywx1qTSlomgSWsOK+h/6TZ7OhtJs/Kwzl6dUI/W6ZhCEAuBSfRLcQHsmoRNgMp5Sudu64rJxd9RPy6BGaRUYFWMXDG0cK3zkt9DpBTdg9e3BZsOZwZK/7PlyS72pcXGQ0piAYTT1En1bOZMNCkVAeh8pZCk7PUcqpGslpk9X2pB/V0BALKU7R/mI8Ihgk0heLvN7xqTouglQGlf/cXLd0+vGw7L3I=
-before_deploy:
-- heroku restart
 after_deploy:
 - pipenv run python main.py xkcd & disown
 - pipenv run python main.py queer & disown
