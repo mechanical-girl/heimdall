@@ -48,7 +48,7 @@ class Heimdall:
 
     Specifically, it maintains a full database of all messages sent
     to every room it's active in. It can also use that database to
-    produce statistic readouts on demand.
+    produce statistic readouts on demand for users and the room.
     """
 
     def __init__(self, room, **kwargs):
