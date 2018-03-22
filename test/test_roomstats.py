@@ -8,7 +8,7 @@ class TestBasics(unittest.TestCase):
 
     def test_roomstats(self):
         recvd = [line.replace('\t','') for line in self.heimdall.get_room_stats().split('\n') if not line.isspace()]
-        self.expcd = [  'There have been 1503 posts in &test (0 today), averaging 53 posts per day over the last 28 days (the busiest was 2018-03-12 with 1319 messages sent).',
+        self.expcd = [  'There have been 1503 posts in &test_data (0 today), averaging 53 posts per day over the last 28 days (the busiest was 2018-03-12 with 1319 messages sent).',
                         '',
                         'The top ten posters are:', 
                         ' 1) 117    Pouncy Silverkitten',

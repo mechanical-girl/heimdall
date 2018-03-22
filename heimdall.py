@@ -55,7 +55,7 @@ class Heimdall:
         if room == 'test_data':
             self.show("Testing mode enabled...", end='')
             self.tests = True
-            self.database = 'test.db'
+            self.database = 'test_data.db'
             self.show(" done")
         else:
             self.tests = kwargs['test'] if 'test' in kwargs else False
