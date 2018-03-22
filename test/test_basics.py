@@ -6,7 +6,7 @@ import time
 
 class TestBasics(unittest.TestCase):
     def setUp(self):
-        self.heimdall = Heimdall('test', False, False, True)
+        self.heimdall = Heimdall('test_data', verbose=False)
         self.tomorrow = int(calendar.timegm(date.fromtimestamp(time.time()).timetuple())+(60*60*24))        
 
     def test_tomorrow(self):
@@ -17,8 +17,9 @@ class TestBasics(unittest.TestCase):
         assert self.heimdall.get_position('Pouncy Silverkitten') == 1
         assert self.heimdall.get_position('ThisUserDoesnaeExist') == "unknown"
 
-def main():
-    unittest.main()
+    def test_date_from_timestamp(self):
+        assert self.heimdall.date_from_timestamp(946688461) == "2000-01-01"
+        assert self.heimdall.date_from_timestamp(978310861) == "2001-01-01"
+        assert self.heimdall.date_from_timestamp(1521314568) == "2018-03-17"
+        assert self.heimdall.date_from_timestamp(1552850568) == "2019-03-17"
 
-if __name__ == "__main__":
-    main()
