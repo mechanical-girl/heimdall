@@ -1,6 +1,5 @@
 *.db*
 *.log
-Pipfile.lock
 *.json
 *.png
 __pycache__/*

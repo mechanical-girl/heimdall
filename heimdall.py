@@ -11,6 +11,7 @@ import calendar
 import codecs
 import html
 import json
+import matplotlib
 import operator
 import os
 import random
