@@ -8,7 +8,6 @@ script:
 - pipenv run coverage run -m unittest discover -s test/ -vv
 deploy:
   provider: heroku
-  strategy: git
   app: pouncysilverkitten-heimdall
   on:
     repo: PouncySilverkitten/heimdall
