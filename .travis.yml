@@ -14,4 +14,4 @@ deploy:
   on:
     repo: PouncySilverkitten/heimdall
   run:
-    - "pipenv run python main.py xkcd & disown && pipenv run python main.py music & disown && pipenv run python main.py writing & disown && pipenv run python main.py music & disown && pipenv run python main.py bots & disown"
+          "pipenv run python main.py writing & disown"
