@@ -8,8 +8,10 @@ script:
 - pipenv run coverage run -m unittest discover -s test/ -vv
 deploy:
   provider: heroku
+  api_key:
+    secure: Oj+QgTmojjXbFpMCxCO3myCVtm+3tsQCl4/NNVpE7XjEbG9h+blZvfJVjVCKauU7r0rna6Z5jalWQ+CO12WCuujrgU3Rv4KLPC+Oz2AynoRrnGti239do97r/8KsJbNeCFmWqo8MlB1cBmQy6V102sPfcOweQEXTTuEbPcCIq+cvzIBe67qCJKbesLNsI5dhqH7fNXmfb0HzDDG7wJSnEsbu+P+pqoYB86wqOhhbrLr0pSlikGs1nzJhi7wA7enxv9D0AR01oABeV+oQ5aHcgu58L9Q6ZxIySzweTtzYF5oj2JMRAj9pL9LucwqjX/YD5DM7DeHCDrpiGEjHEA9xJi/v59OgId7w79p+s+VyWw7ARecg/8eySKVrnBGPGOjCopRzIhbSRvOx3JnvBFwldJXB82SMOHUYQig8jxJLDTNgm8fCDI113k3n6sxH2Kbw86buFpo4+55TAWGuxPTsw4k9/zn81egKx9Vj2zaswLakgbyLBeM7YqpLRbU+aKYtxX/kIYPTQ2an7dNrGzwZFW7Pz+qZfhTES8Qg6wLSBKv7yB80NGC3coaMYPFL8La5p0AP5v73hzN0M/uGNfsSGFZmh4tgVXgy+Cl3nmt1TL3eXYNlMMRyzGWurph/R2jtdZUVAW/RXOXvwFyRpcVSODCprND36b78VSs2I+hc4hw=
   app: pouncysilverkitten-heimdall
   on:
     repo: PouncySilverkitten/heimdall
-  api_key:
-    secure: E52bjXVvZoP+Hy9xkz4t2WkaZIOHsSGLhxgjblPnAAAuk1LSAAYZPav/a7JlysghTcTLF0r3t8VvOMK8r5YBZsnvZzpPelplv/EGDMojbsNqB7auNCZScxsmPPUB9OeVbFWEHLL7W/RuvtIOc2y/Ydlao25/v4cWROKQfEqNzuDEe9dWJKrdiCFQdJangrudnO5ieI//0cbLuzsrUzaCRBuq5iBj3VD7wPhuopZQ2HzMK9oCEJV9gmItRXeyFRwUvc2WPxonuWrmSWb4X3wp+dD6bh5BFoPKSQVuiG6fTCVOBJzByprE1B/9WhCAfvVNG4NMxdEY0mkCTY2ylP2ThQ+ktKAFQIvqWFNn4Gcy7OlnNjpC22ZcL4vdcipq+rb3fsqvlyDiZEh3jILmvDWgXu/4E7hF+A4EhckGSMFc/yrIqOTDFb44QWRzE/Gbwzy31ZVrGNWIUEqVAfywx1qTSlomgSWsOK+h/6TZ7OhtJs/Kwzl6dUI/W6ZhCEAuBSfRLcQHsmoRNgMp5Sudu64rJxd9RPy6BGaRUYFWMXDG0cK3zkt9DpBTdg9e3BZsOZwZK/7PlyS72pcXGQ0piAYTT1En1bOZMNCkVAeh8pZCk7PUcqpGslpk9X2pB/V0BALKU7R/mI8Ihgk0heLvN7xqTouglQGlf/cXLd0+vGw7L3I=
+  run:
+    - "pipenv run python main.py xkcd & disown && pipenv run python main.py music & disown && pipenv run python main.py writing & disown && pipenv run python main.py music & disown && pipenv run python main.py bots & disown"
