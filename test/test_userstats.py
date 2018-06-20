@@ -6,6 +6,10 @@ class TestUserStats(unittest.TestCase):
         self.heimdall = Heimdall('test_data', verbose=False)
         self.heimdall.connect_to_database()
 
+    def tearDown(self):
+        self.heimdall.conn.commit()
+        self.heimdall.conn.close()
+
     def test_userstats(self):
         recvd = [line.replace("\t","") for line in self.heimdall.get_user_stats('Pouncy Silverkitten').split('\n') if not line.startswith("First Message Date:")][1:]
         self.expcd = [  "User:Pouncy Silverkitten",

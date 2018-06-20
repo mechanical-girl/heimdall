@@ -1,31 +1,33 @@
 """Heimdall is a monitoring, logging, and statistics generating bot.
 
+
 Heimdall will eventually have the ability to spread across multiple rooms.
 The goal is that as well as being able to monitor euphoria.io and provide
 accurate logs and statistics on request for the purposes of archiving and
-curiosity.
-
-Part of Project Yggdrasil.
+curiosity, it should be able to track the movements of spammers and other
+known-problematic individuals.
 """
 
+import argparse
 import calendar
 import codecs
 import html
 import json
-import matplotlib
 import operator
 import os
 import random
 import re
+import signal
 import sqlite3
 import string
+import sys
 import time
 import urllib.request
 
-matplotlib.use('Agg')
-
+from aylienapiclient import textapi
 from datetime import datetime, timedelta, date
 from datetime import time as dttime
+from urllib.parse import urlparse
 
 import matplotlib.pyplot as plt
 
@@ -49,25 +51,42 @@ class Heimdall:
 
     Specifically, it maintains a full database of all messages sent
     to every room it's active in. It can also use that database to
-    produce statistic readouts on demand for users and the room.
+    produce statistic readouts on demand.
     """
 
     def __init__(self, room, **kwargs):
-        self.room = room
+        if type(room) == str:
+            self.room = room
+            self.queue = None
+        else:
+            self.room = room[0]
+            self.queue = room[1]
+
         self.stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else True
+        self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
+
         if room == 'test_data':
             self.show("Testing mode enabled...", end='')
             self.tests = True
-            self.database = 'test_data.db'
+            self.database = 'data/heimdall/test_data.db'
             self.show(" done")
         else:
             self.tests = kwargs['test'] if 'test' in kwargs else False
-            self.database = 'logs.db'
+            self.database = 'yggdrasil.db'
+
         self.heimdall = karelia.newBot('Heimdall', self.room)
 
-        self.files = {'regex': 'regex', 'possible_rooms': 'possible_rooms.json', 'help_text': 'help_text.json', 'block_list': 'block_list.json', 'imgur': 'imgur.json'}
+        self.files = {  'regex': 'data/heimdall/regex',
+                        'possible_rooms': 'data/heimdall/possible_rooms.json',
+                        'help_text': 'data/heimdall/help_text.json',
+                        'block_list': 'data/heimdall/block_list.json',
+                        'imgur': 'data/heimdall/imgur.json',
+                        'aylien': 'data/heimdall/aylien.json',
+                        'summ_list': 'data/heimdall/summ_list.json'}
+
         self.show("Loading files... ")
+        
         for key in self.files:
             self.show("    Loading {}...".format(key), end=' ')
             try:
@@ -81,11 +100,13 @@ class Heimdall:
                     f.write('[]')
 
         with open(self.files['help_text'], 'r') as f:
-            self.show("Loading help text...", ' ')
+            self.show("Loading help text...", end=' ')
             try:
                 help_text = json.loads(f.read())
                 self.heimdall.stockResponses['shortHelp'] = help_text['short_help']
                 self.heimdall.stockResponses['longHelp'] = help_text['long_help'].format(self.room)
+                if os.path.basename(os.path.dirname(os.path.realpath(__file__))) != "prod-yggdrasil":
+                    self.heimdall.stockResponses['longHelp'] += "\nThis is a testing instance and may not be reliable."
                 self.show("done")
             except Exception:
                 self.heimdall.log()
@@ -124,13 +145,39 @@ class Heimdall:
                 self.heimdall.log()
                 self.show("Error reading block list - see 'Heimdall &{}.log' for details.".format(self.room))
 
+        with open(self.files["aylien"],'r') as f:
+            self.show("Loading aylien credentials...", end=' ')
+            try:
+                aylien_creds = json.loads(f.read())
+                self.summariser = textapi.Client(aylien_creds[0], aylien_creds[1])
+                self.show("done")
+            except:
+                self.heimdall.log()
+                self.show("Error reading aylien credentials - see 'Heimdall &{self.room}.log for details.")
+
+        with open(self.files["summ_list"], 'r') as f:
+            self.show("Loading summarise domains...", end=' ')
+            try:
+                self.summarise = json.loads(f.read())
+                self.show("done")
+            except:
+                self.heimdall.log()
+                self.show("Error reading summarise domain list - see 'Heimdall &{self.room}.log for details.")
+
         if not self.tests:
             self.heimdall.connect(True)
 
+        self.connect_to_database()
         self.extractor = URLExtract()
 
         self.show("Connecting to database...", end=' ')
-        self.connect_to_database()
+        if self.force_new_logs:
+            self.show("done\nDropping table...", end=' ')
+            try:
+                self.write_to_database('''DROP INDEX globalid''')
+            except:
+                self.heimdall.log()
+            self.write_to_database('''DROP TABLE IF EXISTS messages''')
         self.show("done\nCreating tables...", end=' ')
         self.check_or_create_tables()
         self.show("done")
@@ -140,7 +187,7 @@ class Heimdall:
             self.get_room_logs()
             self.show("Done.")
 
-        self.c.execute('''SELECT COUNT(*) FROM {}'''.format(self.room))
+        self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (self.room,))
         self.total_messages_all_time = self.c.fetchone()[0]
 
         self.conn.close()
@@ -148,6 +195,23 @@ class Heimdall:
         self.show("Ready")
         if not self.tests:
             self.heimdall.disconnect()
+
+    def write_to_database(self, statement, **kwargs):
+        values = kwargs['values'] if 'values' in kwargs else ()
+        mode = kwargs['mode'] if 'mode' in kwargs else "execute"
+        
+        if self.queue is not None:
+            send = (statement, values, mode,)
+            self.queue.put(send)
+        
+        else:
+            if mode == "execute":
+                self.c.execute(statement, values)
+            elif mode == "executemany":
+                self.c.executemany(statement, values)
+            else:
+                pass
+            self.conn.commit()
 
     def connect_to_database(self):
         self.conn = sqlite3.connect(self.database)
@@ -160,20 +224,26 @@ class Heimdall:
 
     def check_or_create_tables(self):
         """Tries to create tables. If it fails, assume tables already exist."""
-
         try:
-            self.c.execute('''  CREATE TABLE {}(
+            self.write_to_database('''  CREATE TABLE messages(
                                 content text,
                                 id text,
                                 parent text,
                                 senderid text,
                                 sendername text,
                                 normname text,
-                                time real
-                            )'''.format(self.room))
-            self.c.execute('''CREATE UNIQUE INDEX messageID ON {}(id)'''.format(self.room))
+                                time real,
+                                room text,
+                                globalid text
+                            )''')
+            self.write_to_database('''CREATE UNIQUE INDEX globalid ON messages(globalid)''')
+            try:
+                self.write_to_database('''CREATE TABLE aliases(master text, alias text)''')
+                self.write_to_database('''CREATE UNIQUE INDEX master ON aliases(alias)''')
+            except: pass
         except sqlite3.OperationalError:
-            self.show(' existing tables found...', ' ')
+            self.heimdall.log()
+            pass
 
     def get_room_logs(self):
         """Create or update logs of the room.
@@ -207,10 +277,9 @@ class Heimdall:
                         raise UpdateDone
 
                     disp = reply['data']['log'][0]
-                    self.show('    ({})[{}] {}'.format( datetime.utcfromtimestamp(disp['time']).strftime("%Y-%m-%d %H:%M"),
-                                                        disp['sender']['name'].translate(self.heimdall.non_bmp_map),
+                    self.show('    ({} in &{})[{}] {}'.format( datetime.utcfromtimestamp(disp['time']).strftime("%Y-%m-%d %H:%M"),
+                                                        self.room, disp['sender']['name'].translate(self.heimdall.non_bmp_map),
                                                         disp['content'].translate(self.heimdall.non_bmp_map)))
-
                     # Append the data in this message to the data list ready for executemany
                     for message in reply['data']['log']:
                         if not 'parent' in message:
@@ -218,16 +287,16 @@ class Heimdall:
                         data.append((   message['content'], message['id'], message['parent'],
                                         message['sender']['id'], message['sender']['name'],
                                         self.heimdall.normaliseNick(message['sender']['name']),
-                                        message['time']))
+                                        message['time'], self.room, self.room+message['id']))
 
                     # Attempts to insert all the messages in bulk. If it fails, it will
                     # break out of the loop and we will assume that the logs are now
                     # up to date.
                     try:
-                        self.c.executemany('''INSERT OR FAIL INTO {} VALUES(?, ?, ?, ?, ?, ?, ?)'''.format(self.room), data)
+                        self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data, mode="executemany")
                     except sqlite3.IntegrityError:
                         raise UpdateDone
- 
+
                     if len(reply['data']['log']) != 1000:
                         raise UpdateDone
                     else:
@@ -237,7 +306,6 @@ class Heimdall:
                     self.insert_message(reply)
  
             except UpdateDone:
-                self.conn.commit()
                 break
 
     def insert_message(self, message):
@@ -248,7 +316,7 @@ class Heimdall:
             data = (message['data']['content'], message['data']['id'], message['data']['parent'],
                     message['data']['sender']['id'], message['data']['sender']['name'],
                     self.heimdall.normaliseNick(message['data']['sender']['name']),
-                    message['data']['time'])
+                    message['data']['time'], self.room, self.room+message['data']['id'])
 
         else:
             if not 'parent' in message:
@@ -256,16 +324,14 @@ class Heimdall:
             data = (message['content'].replace('&', '{ampersand}'), message['id'], message['parent'],
                     message['sender']['id'], message['sender']['name'],
                     self.heimdall.normaliseNick(message['sender']['name']),
-                    message['time'])
+                    message['time'], self.room, self.room+message['id'])
  
-        self.c.execute('''INSERT OR FAIL INTO {} VALUES(?, ?, ?, ?, ?, ?, ?)'''.format(self.room), data)
-        self.conn.commit()
-
+        self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data)
 
     def next_day(self, day):
-        """Returns the timestamp of midnight on the day following the timestamp given"""
+        """Returns the timestamp of UTC midnight on the day following the timestamp given"""
         one_day = 60*60*24
-        tomorrow = int(calendar.timegm(date.fromtimestamp(day).timetuple()) + one_day)
+        tomorrow = int(calendar.timegm(datetime.utcfromtimestamp(day).date().timetuple()) + one_day)
         return(tomorrow)
 
     def date_from_timestamp(self, timestamp):
@@ -306,7 +372,7 @@ class Heimdall:
 
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
-        self.c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(self.room))
+        self.c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.room,))
         normnick = self.heimdall.normaliseNick(nick)
         position = 0
         while True:
@@ -321,7 +387,7 @@ class Heimdall:
 
     def get_user_at_position(self, position):
         """Returns the user at the specified position"""
-        self.c.execute('''SELECT sendername FROM (SELECT sendername, normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(self.room))
+        self.c.execute('''SELECT sendername FROM (SELECT sendername, normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.room,))
 
         # Check to see they've passed a number
         try:
@@ -355,17 +421,21 @@ class Heimdall:
 
     def upload_and_delete_graph(self, filename):
         """Uploads passed file to imgur and deletes it"""
-        url = self.imgur_client.upload_image(filename).link
+        try:
+            url = self.imgur_client.upload_image(filename).link
+        except:
+            self.heimdall.log()
+            url = "Imgur upload failed, sorry."
         os.remove(filename)
         return(url)
 
     def look_for_room_links(self, content):
         """Looks for and saves all possible rooms in message"""
         new_possible_rooms = set([room[1:] for room in content.split() if room[0] == '&'])
-        with open('possible_rooms.json', 'r') as f:
+        with open(self.files['possible_rooms'], 'r') as f:
             possible_rooms = set(json.loads(f.read()))
         possible_rooms.union(new_possible_rooms)
-        with open('possible_rooms.json', 'w') as f:
+        with open(self.files['possible_rooms'], 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
 
     def get_user_stats(self, user):
@@ -374,22 +444,22 @@ class Heimdall:
         normnick = self.heimdall.normaliseNick(user)
 
         # Query gets the number of messages sent
-        self.c.execute('''SELECT count(*) FROM {} WHERE normname is ?'''.format(self.room), (normnick,))
+        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ? AND normname IS ?''', (self.room, normnick,))
         count = self.c.fetchone()[0]
 
         if count == 0:
             return('User @{} not found.'.format(user.replace(' ','')))
 
         # Query gets the earliest message sent
-        self.c.execute('''SELECT * FROM {} WHERE normname IS ? ORDER BY time ASC'''.format(self.room), (normnick,))
+        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time ASC''', (self.room, normnick,))
         earliest = self.c.fetchone()
 
         # Query gets the most recent message sent
-        self.c.execute('''SELECT * FROM {} WHERE normname IS ? ORDER BY time DESC'''.format(self.room), (normnick,))
+        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time DESC''', (self.room, normnick,))
         latest = self.c.fetchone()
 
         days = {}
-        self.c.execute('''SELECT time, COUNT(*) FROM {} WHERE normname IS ? GROUP BY CAST(time / 86400 AS INT)'''.format(self.room), (normnick,))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''', (self.room, normnick,))
         daily_messages = self.c.fetchall()
         days = {}
         for message in daily_messages:
@@ -419,7 +489,7 @@ class Heimdall:
 
         number_of_days = number_of_days if number_of_days > 0 else 1
 
-        last_28_days = sorted(days.items())[::-1][:28]
+        last_28_days = sorted(days.items())[:28]
         title = "Messages by {}, last 28 days".format(user)
         data_x = [day[0] for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
@@ -443,7 +513,7 @@ class Heimdall:
 
         # Get requester's position.
         position = self.get_position(normnick)
-        self.c.execute('''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM {} GROUP BY normname) ORDER BY count DESC'''.format(self.room))
+        self.c.execute('''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.room,))
         no_of_posters = self.c.fetchone()[0]
         # Collate and send the lot.
         return("""
@@ -460,34 +530,38 @@ Ranking:\t\t\t\t\t{} of {}.
 
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
-        self.c.execute('''SELECT count(*) FROM {}'''.format(self.room))
+        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.room,))
         count = self.c.fetchone()[0]
 
         # Calculate top ten posters of all time
-        self.c.execute('''SELECT sendername,normname,COUNT(normname) AS freq FROM {} GROUP BY sendername ORDER BY freq DESC LIMIT 10'''.format(self.room))
+        self.c.execute('''SELECT sendername,normname,COUNT(normname) AS freq FROM messages WHERE room IS ? GROUP BY normname ORDER BY freq DESC LIMIT 10''', (self.room,))
         results = self.c.fetchall()
         top_ten = ""
         for i, result in enumerate(results):
             top_ten += "{:2d}) {:<7}\t{}\n".format(i+1, int(result[2]), result[0])
 
         # Get activity over the last 28 days
-        lower_bound = datetime.now() + timedelta(-28)
-        lower_bound = time.mktime(lower_bound.timetuple())
-        self.c.execute('''SELECT time, COUNT(*) FROM {} WHERE time > ? GROUP BY CAST(time / 86400 AS INT)'''.format(self.room), (lower_bound,))
+        lower_bound = self.next_day(time.time()) - (60*60*24*28)
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.room, lower_bound,))
         last_28_days = self.c.fetchall()
+        days = last_28_days[:]
+        for day in days:
+            last_28_days.append((self.next_day(day[0])-60*60*24, day[1],))
+        days = last_28_days[:]
+        for day in days:
+            last_28_days.append((self.next_day(day[0])-60*60*24, day[1],))
+            last_28_days.remove(day)
         per_day_last_four_weeks = int(sum([count[1] for count in last_28_days])/28)
         last_28_days.sort(key=operator.itemgetter(1))
         busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
         last_28_days.sort(key=operator.itemgetter(0))
 
-        midnight = time.mktime(datetime.combine(date.today(), dttime.min).timetuple())
-        messages_today = 0 
-        for tup in last_28_days:
-            if tup[0] > midnight:
-                messages_today = tup[1]
-                break
+        midnight = calendar.timegm(datetime.utcnow().date().timetuple())
+        messages_today = 0
+        if midnight in [tup[0] for tup in last_28_days]:
+            messages_today = dict(last_28_days)[midnight]
 
-        self.c.execute('''SELECT time, COUNT(*) FROM {} GROUP BY CAST(time/86400 AS INT)'''.format(self.room))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (self.room,))
         messages_by_day = self.c.fetchall()
 
         title = "Messages in &{}, last 28 days".format(self.room)
@@ -536,12 +610,17 @@ Ranking:\t\t\t\t\t{} of {}.
 
             if message['type'] == 'send-reply': return
             
-            self.look_for_room_links(message['data']['content'])
-            urls = self.get_urls(message['data']['content'])
-            self.heimdall.send(self.get_page_titles(urls),message['data']['id'])
+            if message['data']['content'].split(' ')[0] != "!ignore":
+                self.look_for_room_links(message['data']['content'])
+                urls = self.get_urls(message['data']['content'])
+                summs = [url for url in urls if urlparse(url).netloc in self.summarise]
+                urls = [url for url in urls if not url in summs]
+                self.heimdall.send(self.get_page_titles(urls),message['data']['id'])
+                for summ in summs:
+                    self.heimdall.send("{}\n{}".format(self.get_page_titles([summ]), ' '.join(self.summariser.Summarize({"url": summ, "sentences_number": 2})['sentences'])), message['data']['id'])
 
             comm = message['data']['content'].split()
-            if comm[0][0] == "!":
+            if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
                     if len(comm) > 1 and comm[1][0] == "@":
                         self.heimdall.send(self.get_user_stats(comm[1][1:]), message['data']['id'])
@@ -568,6 +647,20 @@ Ranking:\t\t\t\t\t{} of {}.
                     else:
                         self.heimdall.send(self.get_rank_of_user(message['data']['sender']['name']), message['data']['id'])
 
+                elif comm[0] == "!summ" or comm[0] == "!summarise":
+                    if self.get_urls(comm[1]) == [comm[1]]:
+                        self.heimdall.send(' '.join(self.summariser.Summarize({"url": comm[1], "sentences_number": 2})['sentences']), message['data']['id'])
+                        summ_domain = urlparse(comm[1]).netloc
+                        if not summ_domain in self.summarise:
+                            with open(self.files["summ_list"],'r') as f:
+                                self.summarise = json.loads(f.read())
+                            self.summarise.append(summ_domain)
+                            with open(self.files["summ_list"], 'w') as f:
+                                f.write(json.dumps(self.summarise))
+
+                elif comm[0] == "!alias":
+                    pass
+
     def main(self):
         """Main loop"""
         try:
@@ -587,3 +680,37 @@ Ranking:\t\t\t\t\t{} of {}.
             self.heimdall.disconnect()
         finally:
             time.sleep(1)
+        
+def on_sigint(signum, frame):
+    try:
+        heimdall.conn.commit()
+        heimdall.conn.close()
+        heimdall.heimdall.disconnect()
+    finally:
+        sys.exit()
+
+def main(room, **kwargs):
+    signal.signal(signal.SIGINT, on_sigint)
+
+    while True:
+        stealth = kwargs['stealth'] if 'stealth' in kwargs else False
+        new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
+        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs)
+        try: 
+            heimdall.main()
+        except KillError:
+            raise KillError
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("room", nargs='?')
+    parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
+    parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
+    args = parser.parse_args()
+
+    room = args.room
+    stealth = args.stealth
+    new_logs = args.new_logs
+    
+    main(room, stealth=stealth, new_logs=new_logs)

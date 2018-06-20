@@ -1,0 +1,9 @@
+__*
+imgur.json
+*.db-journal
+logs.db
+hermothr_groups.json
+hermothr_messages.json
+*.log
+*.db*
+!test_data.db
