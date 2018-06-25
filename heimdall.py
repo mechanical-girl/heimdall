@@ -462,6 +462,11 @@ class Heimdall:
         self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''', (self.room, normnick,))
         daily_messages = self.c.fetchall()
         days = {}
+        dates = [datetime.utcfromtimestamp(int(x)).strftime("%Y-%m-%d") for x in range(int(earliest[6]), int(time.time()), 60*60*24)]
+
+        for date in dates:
+            days[date] = 0
+
         for message in daily_messages:
             day = datetime.utcfromtimestamp(message[0]).strftime("%Y-%m-%d")
             days[day] = message[1]
