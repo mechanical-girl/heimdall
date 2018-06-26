@@ -65,6 +65,7 @@ class Heimdall:
         self.stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else True
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
+        self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
 
         if room == 'test_data':
             self.show("Testing mode enabled...", end='')
@@ -73,7 +74,7 @@ class Heimdall:
             self.show(" done")
         else:
             self.tests = kwargs['test'] if 'test' in kwargs else False
-            self.database = 'yggdrasil.db'
+            self.database = 'heimdall.db'
 
         self.heimdall = karelia.newBot('Heimdall', self.room)
 
@@ -372,7 +373,7 @@ class Heimdall:
 
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
-        self.c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.room,))
+        self.c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.use_logs,))
         normnick = self.heimdall.normaliseNick(nick)
         position = 0
         while True:
@@ -387,7 +388,7 @@ class Heimdall:
 
     def get_user_at_position(self, position):
         """Returns the user at the specified position"""
-        self.c.execute('''SELECT sendername FROM (SELECT sendername, normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.room,))
+        self.c.execute('''SELECT sendername FROM (SELECT sendername, normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.use_logs,))
 
         # Check to see they've passed a number
         try:
@@ -400,7 +401,7 @@ class Heimdall:
         try:
             for i in range(position): name = self.c.fetchone()[0]
         except:
-            return("You requested a position which doesn't exist. There have been {} uniquely-named posters in &{}.".format(i, self.room))
+            return("You requested a position which doesn't exist. There have been {} uniquely-named posters in &{}.".format(i, self.use_logs))
         return("The user at position {} is {}".format(position, name))
 
     def graph_data(self, data_x, data_y, title):
@@ -444,22 +445,22 @@ class Heimdall:
         normnick = self.heimdall.normaliseNick(user)
 
         # Query gets the number of messages sent
-        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ? AND normname IS ?''', (self.room, normnick,))
+        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ? AND normname IS ?''', (self.use_logs, normnick,))
         count = self.c.fetchone()[0]
 
         if count == 0:
             return('User @{} not found.'.format(user.replace(' ','')))
 
         # Query gets the earliest message sent
-        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time ASC''', (self.room, normnick,))
+        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time ASC''', (self.use_logs, normnick,))
         earliest = self.c.fetchone()
 
         # Query gets the most recent message sent
-        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time DESC''', (self.room, normnick,))
+        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time DESC''', (self.use_logs, normnick,))
         latest = self.c.fetchone()
 
         days = {}
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''', (self.room, normnick,))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, normnick,))
         daily_messages = self.c.fetchall()
         days = {}
         dates = [datetime.utcfromtimestamp(int(x)).strftime("%Y-%m-%d") for x in range(int(earliest[6]), int(time.time()), 60*60*24)]
@@ -494,7 +495,10 @@ class Heimdall:
 
         number_of_days = number_of_days if number_of_days > 0 else 1
 
-        last_28_days = sorted(days.items())[:28]
+        days = sorted(days.items())
+
+        last_28_days = days[-28:]
+
         title = "Messages by {}, last 28 days".format(user)
         data_x = [day[0] for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
@@ -505,10 +509,9 @@ class Heimdall:
             last_28_file = self.save_graph(last_28_graph)
             last_28_url = self.upload_and_delete_graph(last_28_file)
 
-        messages_all_time = days.items()
         title = "Messages by {}, all time".format(user)
-        data_x = [day[0] for day in messages_all_time]
-        data_y = [day[1] for day in messages_all_time]
+        data_x = [day[0] for day in days]
+        data_y = [day[1] for day in days]
         if self.tests:
             all_time_url = "url_goes_here"
         else:
@@ -518,7 +521,7 @@ class Heimdall:
 
         # Get requester's position.
         position = self.get_position(normnick)
-        self.c.execute('''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.room,))
+        self.c.execute('''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.use_logs,))
         no_of_posters = self.c.fetchone()[0]
         # Collate and send the lot.
         return("""
@@ -535,11 +538,11 @@ Ranking:\t\t\t\t\t{} of {}.
 
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
-        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.room,))
+        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs,))
         count = self.c.fetchone()[0]
 
         # Calculate top ten posters of all time
-        self.c.execute('''SELECT sendername,normname,COUNT(normname) AS freq FROM messages WHERE room IS ? GROUP BY normname ORDER BY freq DESC LIMIT 10''', (self.room,))
+        self.c.execute('''SELECT sendername,normname,COUNT(normname) AS freq FROM messages WHERE room IS ? GROUP BY normname ORDER BY freq DESC LIMIT 10''', (self.use_logs,))
         results = self.c.fetchall()
         top_ten = ""
         for i, result in enumerate(results):
@@ -547,7 +550,7 @@ Ranking:\t\t\t\t\t{} of {}.
 
         # Get activity over the last 28 days
         lower_bound = self.next_day(time.time()) - (60*60*24*28)
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.room, lower_bound,))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, lower_bound,))
         last_28_days = self.c.fetchall()
         days = last_28_days[:]
         for day in days:
@@ -566,10 +569,10 @@ Ranking:\t\t\t\t\t{} of {}.
         if midnight in [tup[0] for tup in last_28_days]:
             messages_today = dict(last_28_days)[midnight]
 
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (self.room,))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (self.use_logs,))
         messages_by_day = self.c.fetchall()
 
-        title = "Messages in &{}, last 28 days".format(self.room)
+        title = "Messages in &{}, last 28 days".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
         if self.tests:
@@ -579,7 +582,7 @@ Ranking:\t\t\t\t\t{} of {}.
             last_28_file = self.save_graph(last_28_graph)
             last_28_url = self.upload_and_delete_graph(last_28_file)
 
-        title = "Messages in &{}, all time".format(self.room)
+        title = "Messages in &{}, all time".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in messages_by_day]
         data_y = [day[1] for day in messages_by_day]
         if self.tests:
@@ -589,7 +592,7 @@ Ranking:\t\t\t\t\t{} of {}.
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
 
-        return("There have been {} posts in &{} ({} today), averaging {} posts per day over the last 28 days (the busiest was {} with {} messages sent).\n\nThe top ten posters are:\n{}\n{} {}".format(count, self.room, messages_today, per_day_last_four_weeks, busiest[0], busiest[1], top_ten, all_time_url, last_28_url))
+        return(f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}")
 
     def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
@@ -700,11 +703,14 @@ def main(room, **kwargs):
     while True:
         stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
-        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs)
+        use_logs = kwargs['use_logs'] if 'new_logs' in kwargs else room
+
+        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs)
+        
         try: 
             heimdall.main()
         except KillError:
-            raise KillError
+            raise
 
 
 if __name__ == '__main__':
@@ -712,10 +718,12 @@ if __name__ == '__main__':
     parser.add_argument("room", nargs='?')
     parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
     parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
+    parser.add_argument("--use-logs", type=str, dest="use_logs")
     args = parser.parse_args()
 
     room = args.room
     stealth = args.stealth
     new_logs = args.new_logs
-    
-    main(room, stealth=stealth, new_logs=new_logs)
+    use_logs = args.use_logs
+
+    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs)
