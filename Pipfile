@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 pushover = {git = "https://github.com/Wyattjoh/pushover"}
 websocket-client = "*"
-karelia = {git = "https://github.com/pouncysilverkitten/karelia"}
 numpy = "*"
 matplotlib = "*"
 pyimgur = "*"
@@ -19,5 +18,6 @@ urlextract = "*"
 pylint-badge = {git = "https://github.com/pouncysilverkitten/pylint-badge"}
 requests = "*"
 aylien-apiclient = "*"
+karelia = {git = "https://github.com/pouncysilverkitten/karelia.git"}
 
 [dev-packages]

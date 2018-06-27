@@ -1,15 +1,6 @@
-pylint-badge hermothr.py
 pylint-badge heimdall.py
-pylint-badge forseti.py
-pylint-badge loki.py
-mv hermothr.svg data/hermothr/
 mv heimdall.svg data/heimdall/
-mv forseti.svg data/forseti/
-mv loki.svg data/loki/
-git add data/hermothr/hermothr.svg
 git add data/heimdall/heimdall.svg
-git add data/forseti/forseti.svg
-git add data/loki/loki.svg
 clear
 rm coverage.svg
 pipenv run coverage run --omit */.local/* -m unittest discover -s test/ -vv

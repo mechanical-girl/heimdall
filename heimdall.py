@@ -63,7 +63,7 @@ class Heimdall:
             self.queue = room[1]
 
         self.stealth = kwargs['stealth'] if 'stealth' in kwargs else False
-        self.verbose = kwargs['verbose'] if 'verbose' in kwargs else True
+        self.verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
 
@@ -74,7 +74,7 @@ class Heimdall:
             self.show(" done")
         else:
             self.tests = kwargs['test'] if 'test' in kwargs else False
-            self.database = 'heimdall.db'
+            self.database = '_heimdall.db'
 
         self.heimdall = karelia.newBot('Heimdall', self.room)
 
@@ -244,7 +244,6 @@ class Heimdall:
             except: pass
         except sqlite3.OperationalError:
             self.heimdall.log()
-            pass
 
     def get_room_logs(self):
         """Create or update logs of the room.
@@ -259,6 +258,13 @@ class Heimdall:
         history has been reached.
         """
         self.heimdall.send({'type': 'log', 'data': {'n': 1000}})
+        
+        # Query gets the most recent message sent
+        self.c.execute('''SELECT * FROM messages WHERE room IS ? ORDER BY time DESC''', (self.use_logs,))
+        latest = self.c.fetchone()
+        latest_id = latest[8] if latest != None else None
+
+        update_done = False
 
         while True:
             try:
@@ -283,6 +289,7 @@ class Heimdall:
                                                         disp['content'].translate(self.heimdall.non_bmp_map)))
                     # Append the data in this message to the data list ready for executemany
                     for message in reply['data']['log']:
+                        if latest_id == f"{self.room}{message['id']}": update_done = True
                         if not 'parent' in message:
                             message['parent'] = ''
                         data.append((   message['content'], message['id'], message['parent'],
@@ -298,7 +305,7 @@ class Heimdall:
                     except sqlite3.IntegrityError:
                         raise UpdateDone
 
-                    if len(reply['data']['log']) != 1000:
+                    if len(reply['data']['log']) != 1000 or update_done:
                         raise UpdateDone
                     else:
                         self.heimdall.send({'type': 'log', 'data': {'n': 1000, 'before': reply['data']['log'][0]['id']}})
@@ -703,9 +710,10 @@ def main(room, **kwargs):
     while True:
         stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
-        use_logs = kwargs['use_logs'] if 'new_logs' in kwargs else room
+        use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(room) is str else room[0]
+        verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
 
-        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs)
+        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
         
         try: 
             heimdall.main()
@@ -717,6 +725,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("room", nargs='?')
     parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
+    parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
     parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
     parser.add_argument("--use-logs", type=str, dest="use_logs")
     args = parser.parse_args()
@@ -725,5 +734,6 @@ if __name__ == '__main__':
     stealth = args.stealth
     new_logs = args.new_logs
     use_logs = args.use_logs
+    verbose = args.verbose
 
-    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs)
+    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)

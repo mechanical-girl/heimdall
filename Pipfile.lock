@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "28e3e137f8d8a913e25af20cd34352e088718df612f65bf34e054965f9ee2134"
+            "sha256": "1bbc3ac73bdd03f6b24f573168a03f11280582d57d5d5bc2f0956efb7c0e9ecc"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -114,7 +114,7 @@
             "version": "==2.7"
         },
         "karelia": {
-            "git": "https://github.com/pouncysilverkitten/karelia"
+            "git": "https://github.com/pouncysilverkitten/karelia.git"
         },
         "kiwisolver": {
             "hashes": [
