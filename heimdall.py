@@ -451,16 +451,24 @@ class Heimdall:
         with open(self.files['possible_rooms'], 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
 
-    def get_user_stats(self, user, strict=False):
+    def get_user_stats(self, user, **kwargs):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
         normnick = self.heimdall.normaliseNick(user)
+        strict = not kwargs['aliases'] if 'aliases' in kwargs else True
 
+        warning = ""
         if not strict:
-            self.c.execute('''SELECT alias FROM aliases WHERE master = ?''',(normnick,))
+            self.c.execute('''SELECT master FROM aliases WHERE alias = ?''',(normnick,))
+            try:
+                master = self.c.fetchall()[0][0]
+            except:
+                master = normnick
+            self.c.execute('''SELECT alias FROM aliases WHERE master = ?''',(master,))
             reply = self.c.fetchall()
             if len(reply) == 0:
-                self.send("I don't know your aliases. Please go to &test and post `!alias ` and your name.")
+                warning = f"--aliases was ignored, since no aliases for user {normnick} are known. To correct, please post `!alias @{normnick}` in any room where @Heimdall is present."
+                aliases = [normnick]
             else:
                 aliases = [alias[0] for alias in reply]
         else:
@@ -556,7 +564,8 @@ Most Recent Message:\t{}
 Average Messages/Day:\t{}
 Busiest Day:\t\t\t\t{}, with {} messages
 Ranking:\t\t\t\t\t{} of {}.
-{} {}""".format(user, count, messages_today, first_message_sent, earliest[0], last_message_sent, int(count / number_of_days), busiest_day[0], busiest_day[1], position, no_of_posters, all_time_url, last_28_url))
+{} {}
+{}""".format(user, count, messages_today, first_message_sent, earliest[0], last_message_sent, int(count / number_of_days), busiest_day[0], busiest_day[1], position, no_of_posters, all_time_url, last_28_url, warning).strip())
 
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
@@ -664,16 +673,22 @@ Ranking:\t\t\t\t\t{} of {}.
                     aliases.append(master)
                     self.write_to_database('DELETE FROM aliases WHERE master = ?', values = [master])
                     for alias in aliases:
-                        self.write_to_database('INSERT OR FAIL INTO aliases VALUES (?, ?)', values = [master, alias])
+                        self.write_to_database('INSERT OR FAIL INTO aliases VALUES (?, ?)', values = (master, alias,))
+                    print(len(aliases))
+                    self.c.execute('SELECT * FROM aliases WHERE master =?', (master,))
+                    print(len(self.c.fetchall()))
 
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
-                    if len(comm) > 1 and comm[1][0] == "@":
-                        self.heimdall.send(self.get_user_stats(comm[1][1:]), message['data']['id'])
-                    elif len(comm) == 1:
-                        self.heimdall.send(self.get_user_stats(message['data']['sender']['name']), message['data']['id'])
+                    if (len(comm) == 2 and not (comm[1][0] == '@' or comm[1] == '--aliases')) or (len(comm) == 3 and not (comm[1] == '--aliases' and comm[2][0] == '@')) or len(comm) > 3:
+                        self.heimdall.send("Sorry, I didn't understand that. Syntax is !stats (--aliases) or !stats (--aliases) @user", message['data']['id'])
                     else:
-                        self.heimdall.send("Sorry, I didn't understand that. Syntax is !stats or !stats @user", message['data']['id'])
+                        use_aliases = True if len(comm) > 1 and comm[1] == '--aliases' else False
+                        if len(comm) == 1 or (len(comm) == 2 and use_aliases):
+                            name = message['data']['sender']['name']
+                        else:
+                            name = comm[2][1:] if use_aliases else comm[1][1:]
+                        self.heimdall.send(self.get_user_stats(name, aliases=use_aliases), message['data']['id'])
 
                 elif comm[0] == "!roomstats":
                     if len(comm) > 1:
