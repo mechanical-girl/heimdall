@@ -48,6 +48,7 @@ def main():
         instance = mp.Process(target = run_heimdall, args=(room, queue, new_logs))
         instance.daemon = True
         instance.start()
+        time.sleep(1)
         
     yggdrasil = karelia.bot('Yggdrasil', 'test')
     yggdrasil.connect()
