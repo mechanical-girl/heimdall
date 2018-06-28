@@ -206,13 +206,16 @@ class Heimdall:
             self.queue.put(send)
         
         else:
-            if mode == "execute":
-                self.c.execute(statement, values)
-            elif mode == "executemany":
-                self.c.executemany(statement, values)
-            else:
+            try:
+                if mode == "execute":
+                    self.c.execute(statement, values)
+                elif mode == "executemany":
+                    self.c.executemany(statement, values)
+                else:
+                    pass
+                self.conn.commit()
+            except:
                 pass
-            self.conn.commit()
 
     def connect_to_database(self):
         self.conn = sqlite3.connect(self.database)
@@ -625,7 +628,7 @@ Ranking:\t\t\t\t\t{} of {}.
 
             if message['type'] == 'send-reply': return
             
-            if message['data']['content'].split(' ')[0] != "!ignore":
+            if message['data']['content'].split(' ')[0] not in ["!ignore","!summ","!summarise"]:
                 self.look_for_room_links(message['data']['content'])
                 urls = self.get_urls(message['data']['content'])
                 summs = [url for url in urls if urlparse(url).netloc in self.summarise]
@@ -664,7 +667,7 @@ Ranking:\t\t\t\t\t{} of {}.
 
                 elif comm[0] == "!summ" or comm[0] == "!summarise":
                     if self.get_urls(comm[1]) == [comm[1]]:
-                        self.heimdall.send(' '.join(self.summariser.Summarize({"url": comm[1], "sentences_number": 2})['sentences']), message['data']['id'])
+                        self.heimdall.send(f"{self.get_page_titles(comm[1])}\n\n{' '.join(self.summariser.Summarize({'url': comm[1], 'sentences_number': 2})['sentences'])}", message['data']['id'])
                         summ_domain = urlparse(comm[1]).netloc
                         if not summ_domain in self.summarise:
                             with open(self.files["summ_list"],'r') as f:
