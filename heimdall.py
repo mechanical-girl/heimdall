@@ -106,7 +106,7 @@ class Heimdall:
                 help_text = json.loads(f.read())
                 self.heimdall.stockResponses['shortHelp'] = help_text['short_help']
                 self.heimdall.stockResponses['longHelp'] = help_text['long_help'].format(self.room)
-                if os.path.basename(os.path.dirname(os.path.realpath(__file__))) != "prod-yggdrasil":
+                if os.path.basename(os.path.dirname(os.path.realpath(__file__))) != "prod-heimdall":
                     self.heimdall.stockResponses['longHelp'] += "\nThis is a testing instance and may not be reliable."
                 self.show("done")
             except Exception:
@@ -241,11 +241,13 @@ class Heimdall:
                                 globalid text
                             )''')
             self.write_to_database('''CREATE UNIQUE INDEX globalid ON messages(globalid)''')
-            try:
-                self.write_to_database('''CREATE TABLE aliases(master text, alias text)''')
-                self.write_to_database('''CREATE UNIQUE INDEX master ON aliases(alias)''')
-            except: pass
         except sqlite3.OperationalError:
+            self.heimdall.log()
+
+        try:
+            self.write_to_database('''CREATE TABLE aliases(master text, alias text)''')
+            self.write_to_database('''CREATE UNIQUE INDEX master ON aliases(alias)''')
+        except:
             self.heimdall.log()
 
     def get_room_logs(self):
@@ -449,28 +451,38 @@ class Heimdall:
         with open(self.files['possible_rooms'], 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
 
-    def get_user_stats(self, user):
+    def get_user_stats(self, user, strict=False):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
         normnick = self.heimdall.normaliseNick(user)
 
+        if not strict:
+            self.c.execute('''SELECT alias FROM aliases WHERE master = ?''',(normnick,))
+            reply = self.c.fetchall()
+            if len(reply) == 0:
+                self.send("I don't know your aliases. Please go to &test and post `!alias ` and your name.")
+            else:
+                aliases = [alias[0] for alias in reply]
+        else:
+            aliases = [normnick]
+
         # Query gets the number of messages sent
-        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ? AND normname IS ?''', (self.use_logs, normnick,))
+        self.c.execute(f'''SELECT count(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''', (self.use_logs, *aliases,))
         count = self.c.fetchone()[0]
 
         if count == 0:
             return('User @{} not found.'.format(user.replace(' ','')))
 
         # Query gets the earliest message sent
-        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time ASC''', (self.use_logs, normnick,))
+        self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''', (self.use_logs, *aliases,))
         earliest = self.c.fetchone()
 
         # Query gets the most recent message sent
-        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time DESC''', (self.use_logs, normnick,))
+        self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time DESC''', (self.use_logs, *aliases,))
         latest = self.c.fetchone()
 
         days = {}
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, normnick,))
+        self.c.execute(f'''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, *aliases,))
         daily_messages = self.c.fetchall()
         days = {}
         dates = [datetime.utcfromtimestamp(int(x)).strftime("%Y-%m-%d") for x in range(int(earliest[6]), int(time.time()), 60*60*24)]
@@ -638,6 +650,22 @@ Ranking:\t\t\t\t\t{} of {}.
                     self.heimdall.send("{}\n{}".format(self.get_page_titles([summ]), ' '.join(self.summariser.Summarize({"url": summ, "sentences_number": 2})['sentences'])), message['data']['id'])
 
             comm = message['data']['content'].split()
+
+            if message['data']['sender']['name'] == "TellBot" and message['data']['sender']['id'].startswith("bot:"):
+                if comm[0:2] == ["Aliases", "of"]:
+                    if '\n' in message['data']['sender']['name']:
+                        command = message['data']['content'].split('\n')[1]
+                    else:
+                        command = message['data']['content']
+            
+                    new_aliases = command
+                    master = self.heimdall.normaliseNick(new_aliases.split()[2][1:])
+                    aliases = [self.heimdall.normaliseNick(alias[0:-1]) if alias.endswith(',') else self.heimdall.normaliseNick(alias) for alias in new_aliases.split()[5:] if alias not in ["you,", "and"]]
+                    aliases.append(master)
+                    self.write_to_database('DELETE FROM aliases WHERE master = ?', values = [master])
+                    for alias in aliases:
+                        self.write_to_database('INSERT OR FAIL INTO aliases VALUES (?, ?)', values = [master, alias])
+
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
                     if len(comm) > 1 and comm[1][0] == "@":
@@ -675,9 +703,6 @@ Ranking:\t\t\t\t\t{} of {}.
                             self.summarise.append(summ_domain)
                             with open(self.files["summ_list"], 'w') as f:
                                 f.write(json.dumps(self.summarise))
-
-                elif comm[0] == "!alias":
-                    pass
 
     def main(self):
         """Main loop"""
