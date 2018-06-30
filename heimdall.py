@@ -778,4 +778,3 @@ if __name__ == '__main__':
     verbose = args.verbose
 
     main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
-
