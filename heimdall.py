@@ -674,7 +674,9 @@ Ranking:\t\t\t\t\t{} of {}.
                     self.write_to_database('DELETE FROM aliases WHERE master = ?', values = [master])
                     for alias in aliases:
                         self.write_to_database('INSERT OR FAIL INTO aliases VALUES (?, ?)', values = (master, alias,))
+                    print(len(aliases))
                     self.c.execute('SELECT * FROM aliases WHERE master =?', (master,))
+                    print(len(self.c.fetchall()))
 
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
