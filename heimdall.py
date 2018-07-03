@@ -264,7 +264,7 @@ class Heimdall:
         """
         self.heimdall.send({'type': 'log', 'data': {'n': 1000}})
         
-        # Query gets the most recent message sent
+        # Query gets the most recent message sent so that we have something to compare to. If Heimdall is running in stand-alone mode, the sqlite3.IntegrityError that gets raised to signal that the logs are up to date will be received, but if it is writing to the database via Forseti, it has no way to receive that exception, so we have to check manually for that usecase.
         self.c.execute('''SELECT * FROM messages WHERE room IS ? ORDER BY time DESC''', (self.use_logs,))
         latest = self.c.fetchone()
         latest_id = latest[8] if latest != None else None
@@ -282,11 +282,11 @@ class Heimdall:
 
                 # Logs and single messages are structured differently.
                 if reply['type'] == 'log-reply':
-                    # Check if the log-reply is empty, i.e. the last log-reply
-                    # contained exactly the first 1000 messages in the room's
-                    # history
-                    if len(reply['data']['log']) == 0:
-                        raise UpdateDone
+                    # Check if the log-reply is empty, i.e. the last log-reply contained exactly the first 1000 messages in the room's history
+                    if len(reply['data']['log']) < 1000:
+                        update_done = True
+                    else:
+                        self.heimdall.send({'type': 'log', 'data': {'n': 1000, 'before': reply['data']['log'][0]['id']}})
 
                     disp = reply['data']['log'][0]
                     self.show('    ({} in &{})[{}] {}'.format( datetime.utcfromtimestamp(disp['time']).strftime("%Y-%m-%d %H:%M"),
@@ -310,11 +310,9 @@ class Heimdall:
                     except sqlite3.IntegrityError:
                         raise UpdateDone
 
-                    if len(reply['data']['log']) != 1000 or update_done:
+                    if update_done:
                         raise UpdateDone
-                    else:
-                        self.heimdall.send({'type': 'log', 'data': {'n': 1000, 'before': reply['data']['log'][0]['id']}})
- 
+
                 else:
                     self.insert_message(reply)
  
@@ -467,14 +465,14 @@ class Heimdall:
             self.c.execute('''SELECT alias FROM aliases WHERE master = ?''',(master,))
             reply = self.c.fetchall()
             if len(reply) == 0:
-                warning = f"--aliases was ignored, since no aliases for user {normnick} are known. To correct, please post `!alias @{normnick}` in any room where @Heimdall is present."
+                warning = f"--aliases was ignored, since no aliases for user {user} are known. To correct, please post `!alias @{user.replace(' ','')}` in any room where @Heimdall is present."
                 aliases = [normnick]
             else:
                 aliases = [alias[0] for alias in reply]
         else:
             aliases = [normnick]
 
-        # Query gets the number of messages sent
+        # Query gets the number of messages sent. `','.join(['?']*len(aliases))` is used so that there are enough question marks for the number of aliases
         self.c.execute(f'''SELECT count(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''', (self.use_logs, *aliases,))
         count = self.c.fetchone()[0]
 
@@ -482,7 +480,7 @@ class Heimdall:
             return('User @{} not found.'.format(user.replace(' ','')))
 
         # Query gets the earliest message sent
-        self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''', (self.use_logs, *aliases,))
+        self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time ASC''', (self.use_logs, *aliases,))
         earliest = self.c.fetchone()
 
         # Query gets the most recent message sent
