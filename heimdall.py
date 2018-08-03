@@ -67,14 +67,16 @@ class Heimdall:
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
 
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
         if room == 'test_data':
             self.show("Testing mode enabled...", end='')
             self.tests = True
-            self.database = 'data/heimdall/test_data.db'
+            self.database = os.path.join(BASE_DIR, "data/heimdall/test_data.db")
             self.show(" done")
         else:
             self.tests = kwargs['test'] if 'test' in kwargs else False
-            self.database = '_heimdall.db'
+            self.database = os.path.join(BASE_DIR, "_heimdall.db")
 
         self.heimdall = karelia.newBot('Heimdall', self.room)
 
@@ -165,31 +167,29 @@ class Heimdall:
                 self.heimdall.log()
                 self.show("Error reading summarise domain list - see 'Heimdall &{self.room}.log for details.")
 
-        if not self.tests:
-            self.heimdall.connect(True)
-
-        self.connect_to_database()
         self.extractor = URLExtract()
 
+        self.connect_to_database()
         self.show("Connecting to database...", end=' ')
         if self.force_new_logs:
-            self.show("done\nDropping table...", end=' ')
-            try:
-                self.write_to_database('''DROP INDEX globalid''')
-            except:
-                self.heimdall.log()
-            self.write_to_database('''DROP TABLE IF EXISTS messages''')
+            self.show("done\nDeleting messages...", end=' ')
+            self.write_to_database('''DELETE FROM messages WHERE room IS ?''', values=(self.room,))
         self.show("done\nCreating tables...", end=' ')
         self.check_or_create_tables()
         self.show("done")
-
+        
         if not self.tests:
+            self.heimdall.connect()
             self.show("Getting logs...")
             self.get_room_logs()
             self.show("Done.")
 
-        self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (self.room,))
-        self.total_messages_all_time = self.c.fetchone()[0]
+        try:
+            self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (self.room,))
+            self.total_messages_all_time = self.c.fetchone()[0]
+        except:
+            self.total_messages_all_time = 0
+            self.heimdall.log()
 
         self.conn.close()
 
@@ -212,11 +212,13 @@ class Heimdall:
                 self.c.executemany(statement, values)
             else:
                 pass
-            self.conn.commit()
+
+        self.conn.commit()
 
     def connect_to_database(self):
         self.conn = sqlite3.connect(self.database)
         self.c = self.conn.cursor()
+        self.check_or_create_tables()
 
     def show(self, *args, **kwargs):
         """Only print if self.verbose"""
@@ -225,25 +227,20 @@ class Heimdall:
 
     def check_or_create_tables(self):
         """Tries to create tables. If it fails, assume tables already exist."""
-        try:
-            self.write_to_database('''  CREATE TABLE messages(
-                                content text,
-                                id text,
-                                parent text,
-                                senderid text,
-                                sendername text,
-                                normname text,
-                                time real,
-                                room text,
-                                globalid text
-                            )''')
-            self.write_to_database('''CREATE UNIQUE INDEX globalid ON messages(globalid)''')
-            try:
-                self.write_to_database('''CREATE TABLE aliases(master text, alias text)''')
-                self.write_to_database('''CREATE UNIQUE INDEX master ON aliases(alias)''')
-            except: pass
-        except sqlite3.OperationalError:
-            self.heimdall.log()
+        self.write_to_database('''  CREATE TABLE IF NOT EXISTS messages(
+                            content text,
+                            id text,
+                            parent text,
+                            senderid text,
+                            sendername text,
+                            normname text,
+                            time real,
+                            room text,
+                            globalid text
+                        )''')
+        self.write_to_database('''CREATE UNIQUE INDEX IF NOT EXISTS globalid ON messages(globalid)''')
+        self.write_to_database('''CREATE TABLE IF NOT EXISTS aliases(master text, alias text)''')
+        self.write_to_database('''CREATE UNIQUE INDEX IF NOT EXISTS master ON aliases(alias)''')
 
     def get_room_logs(self):
         """Create or update logs of the room.
@@ -260,10 +257,13 @@ class Heimdall:
         self.heimdall.send({'type': 'log', 'data': {'n': 1000}})
         
         # Query gets the most recent message sent so that we have something to compare to. If Heimdall is running in stand-alone mode, the sqlite3.IntegrityError that gets raised to signal that the logs are up to date will be received, but if it is writing to the database via Forseti, it has no way to receive that exception, so we have to check manually for that usecase.
-        self.c.execute('''SELECT * FROM messages WHERE room IS ? ORDER BY time DESC''', (self.use_logs,))
-        latest = self.c.fetchone()
-        latest_id = latest[8] if latest != None else None
-
+        try:
+            self.c.execute('''SELECT * FROM messages WHERE room IS ? ORDER BY time DESC''', (self.room,))
+            latest = self.c.fetchone()
+            latest_id = latest[8] if latest != None else None
+        except sqlite3.OperationalError:
+            latest_id = None
+        self.show(f"{self.room}: {latest_id}")
         update_done = False
 
         while True:
@@ -278,7 +278,9 @@ class Heimdall:
                 # Logs and single messages are structured differently.
                 if reply['type'] == 'log-reply':
                     # Check if the log-reply is empty, i.e. the last log-reply contained exactly the first 1000 messages in the room's history
-                    if len(reply['data']['log']) < 1000:
+                    if len(reply['data']['log']) == 0:
+                        raise UpdateDone
+                    elif len(reply['data']['log']) < 1000:
                         update_done = True
                     else:
                         self.heimdall.send({'type': 'log', 'data': {'n': 1000, 'before': reply['data']['log'][0]['id']}})
@@ -286,7 +288,8 @@ class Heimdall:
                     disp = reply['data']['log'][0]
                     self.show('    ({} in &{})[{}] {}'.format( datetime.utcfromtimestamp(disp['time']).strftime("%Y-%m-%d %H:%M"),
                                                         self.room, disp['sender']['name'].translate(self.heimdall.non_bmp_map),
-                                                        disp['content'].translate(self.heimdall.non_bmp_map)))
+                                                        disp['content'].split('\n')[0][0:80].translate(self.heimdall.non_bmp_map)))
+
                     # Append the data in this message to the data list ready for executemany
                     for message in reply['data']['log']:
                         if latest_id == f"{self.room}{message['id']}": update_done = True
@@ -444,7 +447,7 @@ class Heimdall:
         with open(self.files['possible_rooms'], 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
 
-    def get_user_stats(self, user):
+    def get_user_stats(self, user, **kwargs):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
         normnick = self.heimdall.normaliseNick(user)
