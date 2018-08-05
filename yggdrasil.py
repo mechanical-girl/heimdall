@@ -28,7 +28,9 @@ class Yggdrasil:
         self.new_logs = args.new_logs
         self.use_logs = args.use_logs
         self.verbose = args.verbose
-        self.rooms = ['xkcd', 'music', 'queer', 'bots', 'test']
+
+        with open('rooms.json') as f:
+            self.rooms = json.loads(f.read())
 
         self.queue = mp.Queue()
 
