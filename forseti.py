@@ -18,10 +18,16 @@ class Forseti:
             query, values, mode = incoming[0], incoming[1], incoming[2]
             
             if mode == 'execute':
-                self.c.execute(query, values)
+                try:
+                    self.c.execute(query, values)
+                except:
+                    pass
 
             elif mode == 'executemany':
-                self.c.executemany(query, values)
+                try:
+                    self.c.executemany(query, values)
+                except:
+                    pass
 
             self.conn.commit()
 

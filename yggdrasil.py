@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import time
 import argparse
+import importlib
 
 import forseti
 import heimdall
@@ -12,57 +13,83 @@ class UpdateDone(Exception):
 class KillError(Exception):
     pass
 
+class Yggdrasil:
+    def __init__(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("room", nargs='?')
+        parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
+        parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
+        parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
+        parser.add_argument("--use-logs", type=str, dest="use_logs")
+        args = parser.parse_args()
+
+        self.room = args.room
+        self.stealth = args.stealth
+        self.new_logs = args.new_logs
+        self.use_logs = args.use_logs
+        self.verbose = args.verbose
+        self.rooms = ['xkcd', 'music', 'queer', 'bots', 'test']
+
+        self.queue = mp.Queue()
+
+        self.instances = []
+        instance = mp.Process(target = self.run_forseti)
+        instance.daemon = True
+        instance.name = "forseti"
+        self.instances.append(instance)
+
+        for room in self.rooms:
+            instance = mp.Process(target = self.run_heimdall, args=(room, self.stealth, self.new_logs, self.use_logs, self.verbose, self.queue))
+            instance.daemon = True
+            instance.name = room
+            self.instances.append(instance)
+
+    def run_heimdall(self, room, stealth, new_logs, use_logs, verbose, queue):
+        if room == "test": 
+            heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs="xkcd", verbose=verbose)
+        else:
+            heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
+
+    def run_forseti(self):
+        forseti.main(self.queue)
+
+    def on_sigint(self, signum, frame):
+        """Gracefully handle sigints"""
+        try:
+            self.terminate()
+        finally:
+            sys.exit(0)
+
+    def start(self):
+        for instance in self.instances:
+            instance.start()
+
+    def stop(self):
+        for instance in self.instances:
+            instance.terminate()
+
 def on_sigint(signum, frame):
-    """Gracefully handle sigints"""
-    try:
-        heimdall.conn.commit()
-        heimdall.conn.close()
-        heimdall.heimdall.disconnect()
-    finally:
-        sys.exit()
-
-def run_forseti(queue):
-    forseti.main(queue)
-
-def run_heimdall(room, stealth, new_logs, use_logs, verbose, queue):
-    if room == "test": 
-        heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs="xkcd", verbose=verbose)
-    else:
-        heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
+    pass
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("room", nargs='?')
-    parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
-    parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
-    parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
-    parser.add_argument("--use-logs", type=str, dest="use_logs")
-    args = parser.parse_args()
+    importlib.reload(forseti)
+    importlib.reload(heimdall)
+    importlib.reload(karelia)
 
-    room = args.room
-    stealth = args.stealth
-    new_logs = args.new_logs
-    use_logs = args.use_logs
-    verbose = args.verbose
+    ygg = Yggdrasil()
+    ygg.start()
 
-    rooms = ['xkcd', 'music', 'queer', 'bots', 'test']
-
-    queue = mp.Queue()
-    instance = mp.Process(target = run_forseti, args=(queue,))
-    instance.daemon = True
-    instance.name = "forseti"
-    instance.start()
-
-    for room in rooms:
-        instance = mp.Process(target = run_heimdall, args=(room, stealth, new_logs, use_logs, verbose, queue))
-        instance.daemon = True
-        instance.name = room
-        instance.start()
-        
+    ygg.on_sigint = on_sigint
+    
     yggdrasil = karelia.bot('Yggdrasil', 'test')
     yggdrasil.connect()
     while True:
-        yggdrasil.parse()
+        message = yggdrasil.parse()
+        if message['type'] == 'send-event':
+            if message['data']['content'] == '!restart @Yggdrasil':
+                yggdrasil.disconnect()
+                ygg.stop()
+                main()
 
 if __name__ == '__main__':
     main()
