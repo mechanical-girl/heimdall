@@ -27,6 +27,7 @@ import urllib.request
 from aylienapiclient import textapi
 from datetime import datetime, timedelta, date
 from datetime import time as dttime
+from typing import *
 from urllib.parse import urlparse
 
 import matplotlib.pyplot as plt
@@ -54,7 +55,7 @@ class Heimdall:
     produce statistic readouts on demand.
     """
 
-    def __init__(self, room, **kwargs):
+    def __init__(self, room: Union[str, Tuple], **kwargs) -> None:
         if type(room) == str:
             self.room = room
             self.queue = None
@@ -105,7 +106,7 @@ class Heimdall:
         with open(self.files['help_text'], 'r') as f:
             self.show("Loading help text...", end=' ')
             try:
-                help_text = json.loads(f.read())
+                help_text: Dict[str, str] = json.loads(f.read())
                 self.heimdall.stockResponses['shortHelp'] = help_text['short_help']
                 self.heimdall.stockResponses['longHelp'] = help_text['long_help'].format(self.room)
                 if os.path.basename(os.path.dirname(os.path.realpath(__file__))) != "prod-yggdrasil":
@@ -118,7 +119,7 @@ class Heimdall:
         with open(self.files['regex'], 'r') as f:
             self.show("Loading url regex...", end=' ')
             try:
-                self.url_regex = f.read()
+                self.url_regex: str = f.read()
                 self.show("done")
             except:
                 self.heimdall.log()
@@ -127,7 +128,7 @@ class Heimdall:
         with open(self.files['imgur'], 'r') as f:
             self.show("Reading imgur key, creating Imgur client...", end=' ')
             try:
-                self.imgur_key = json.loads(f.read())[0]
+                self.imgur_key: str = json.loads(f.read())[0]
                 self.imgur_client = pyimgur.Imgur(self.imgur_key)
                 self.show("done")
             except Exception:
@@ -137,12 +138,12 @@ class Heimdall:
         with open(self.files['block_list'], 'r+') as f:
             try:
                 self.show("Loading blocklists...", end=' ')
-                block_domains = json.loads(f.read())
+                block_domains: Dict[str, List[str]] = json.loads(f.read())
                 if self.room in block_domains:
-                    self.block_domains = block_domains[self.room]
+                    self.block_domains: List[str] = block_domains[self.room]
                 else:
                     self.show("using master", end=' ')
-                    self.block_domains = block_domains['master'][:]
+                    self.block_domains: List[str] = block_domains['master'][:]
                 self.show("done")
             except:
                 self.heimdall.log()
@@ -179,7 +180,7 @@ class Heimdall:
         self.show("done")
         
         if not self.tests:
-            self.heimdall.connect()
+            self.heimdall.connect(True)
             self.show("Getting logs...")
             self.get_room_logs()
             self.show("Done.")
@@ -693,7 +694,7 @@ Ranking:\t\t\t\t\t{} of {}.
                                 f.write(json.dumps(self.summarise))
 
                 elif comm[0] == "!alias":
-                    pass
+                    pass                
 
     def main(self):
         """Main loop"""
