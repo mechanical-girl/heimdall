@@ -4,6 +4,7 @@ import argparse
 import importlib
 import json
 import subprocess
+import os
 
 import forseti
 import heimdall
