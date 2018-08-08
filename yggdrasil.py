@@ -86,6 +86,7 @@ def main():
     ygg.on_sigint = on_sigint
     
     yggdrasil = karelia.bot('Yggdrasil', 'test')
+    yggdrasil.stockResponses['longHelp'] = "/me manages Heimdall"
     yggdrasil.connect()
     while True:
         message = yggdrasil.parse()
