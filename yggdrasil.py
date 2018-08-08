@@ -95,12 +95,11 @@ def main():
                 ygg.stop()
                 main()
             elif message['data']['content'] == '!deploy @Yggdrasil':
-                try:
-                    subprocess.run(["git", "pull"], capture_output=True).check_returncode()
+                if subprocess.run(["git", "pull"]).returncode == 0:
                     yggdrasil.disconnect()
                     ygg.stop()
                     main()
-                except CalledProcessError:
+                else:
                     yggdrasil.send('Pull failed - sorry.',message['data']['id'])
 
 if __name__ == '__main__':
