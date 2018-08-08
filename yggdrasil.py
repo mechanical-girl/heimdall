@@ -96,7 +96,7 @@ def main():
                 main()
             elif message['data']['content'] == '!deploy @Yggdrasil':
                 try:
-                    subprocess.run(["git", "pull"]).check_returncode()
+                    subprocess.run(["git", "pull"], capture_output=True).check_returncode()
                     yggdrasil.disconnect()
                     ygg.stop()
                     main()
