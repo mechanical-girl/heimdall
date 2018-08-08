@@ -658,11 +658,14 @@ Ranking:\t\t\t\t\t{} of {}.
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
                     if len(comm) > 1 and comm[1][0] == "@":
-                        self.heimdall.send(self.get_user_stats(comm[1][1:]), message['data']['id'])
+                        aliases = True if len(comm) == 3 and comm[2] == '--aliases' else False
+                        self.heimdall.send(self.get_user_stats(comm[1][1:], aliases=aliases), message['data']['id'])
+                    elif len(comm) == 2 and comm[1] == '--aliases':
+                        self.heimdall.send(self.get_user_stats(message['data']['sender']['name'], aliases=True), message['data']['id'])
                     elif len(comm) == 1:
                         self.heimdall.send(self.get_user_stats(message['data']['sender']['name']), message['data']['id'])
                     else:
-                        self.heimdall.send("Sorry, I didn't understand that. Syntax is !stats or !stats @user", message['data']['id'])
+                        self.heimdall.send("Sorry, I didn't understand that. Syntax is !stats (--aliases) or !stats @user (--aliases)", message['data']['id'])
 
                 elif comm[0] == "!roomstats":
                     if len(comm) > 1:
@@ -694,8 +697,37 @@ Ranking:\t\t\t\t\t{} of {}.
                                 f.write(json.dumps(self.summarise))
 
                 elif comm[0] == "!alias":
-                    pass                
+                    while True:
+                        msg = self.heimdall.parse()
+                        if msg['type'] == 'send-event' and msg['data']['sender']['name'] == "TellBot" and 'bot:' in msg['data']['sender']['id'] and msg['data']['content'].split()[0] == "Aliases":
+                            break
+                    
+                    if '\n' in msg['data']['content']:
+                        nicks = msg['data']['content'].split('\n')[1].split()[5:]
+                    else:
+                        nicks = msg['data']['content'].split()[4:]
 
+                    if 'and' in nicks: nicks.remove('and')
+                    if 'you,' in nicks:
+                        nicks.remove('you,')
+                        nicks.insert(0, self.heimdall.normaliseNick(msg['data']['content'].split()[2][1:]))
+
+                    nicks = [self.heimdall.normaliseNick(nick[:-1] if nick[-1] == ',' else nick) for nick in nicks]
+                    
+                    master_nick = None
+                    for nick in nicks:
+                        self.c.execute('''SELECT COUNT(*) FROM aliases WHERE master IS ?''', (nick,))
+                        if self.c.fetchall()[0] != 0:
+                            master_nick = nick
+                            break
+
+                    if master_nick == None:
+                        master_nick = nicks[0]
+
+                    for nick in nicks:
+                        self.write_to_database('''INSERT OR FAIL INTO aliases VALUES(?, ?)''', values=(master_nick, nick))
+
+                    
     def main(self):
         """Main loop"""
         try:
