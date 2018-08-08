@@ -454,7 +454,6 @@ class Heimdall:
         normnick = self.heimdall.normaliseNick(user)
         strict = not kwargs['aliases'] if 'aliases' in kwargs else True
 
-        warning = ""
         if not strict:
             self.c.execute('''SELECT master FROM aliases WHERE alias = ?''',(normnick,))
             try:
@@ -464,11 +463,13 @@ class Heimdall:
             self.c.execute('''SELECT alias FROM aliases WHERE master = ?''',(master,))
             reply = self.c.fetchall()
             if len(reply) == 0:
-                warning = f"--aliases was ignored, since no aliases for user {user} are known. To correct, please post `!alias @{user.replace(' ','')}` in any room where @Heimdall is present."
+                aliases_used = f"--aliases was ignored, since no aliases for user {user} are known. To correct, please post `!alias @{user.replace(' ','')}` in any room where @Heimdall is present."
                 aliases = [normnick]
             else:
                 aliases = [alias[0] for alias in reply]
+                aliases_used = f"{len(aliases)-1} aliases used."
         else:
+            aliases_used = "No aliases used."
             aliases = [normnick]
 
         # Query gets the number of messages sent. `','.join(['?']*len(aliases))` is used so that there are enough question marks for the number of aliases
@@ -551,17 +552,19 @@ class Heimdall:
         self.c.execute('''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.use_logs,))
         no_of_posters = self.c.fetchone()[0]
         # Collate and send the lot.
-        return("""
-User:\t\t\t\t\t{}
-Messages:\t\t\t\t{}
-Messages Sent Today:\t\t{}
-First Message Date:\t\t{}
-First Message:\t\t\t{}
-Most Recent Message:\t{}
-Average Messages/Day:\t{}
-Busiest Day:\t\t\t\t{}, with {} messages
-Ranking:\t\t\t\t\t{} of {}.
-{} {}""".format(user, count, messages_today, first_message_sent, earliest[0], last_message_sent, int(count / number_of_days), busiest_day[0], busiest_day[1], position, no_of_posters, all_time_url, last_28_url))
+        return(f"""
+User:\t\t\t\t\t{user}
+Messages:\t\t\t\t{count}
+Messages Sent Today:\t\t{messages_today}
+First Message Date:\t\t{first_message_sent}
+First Message:\t\t\t{earliest[0]}
+Most Recent Message:\t{last_message_sent}
+Average Messages/Day:\t{int(count/number_of_days)}
+Busiest Day:\t\t\t\t{busiest_day[0]}, with {busiest_day[1]} messages
+Ranking:\t\t\t\t\t{position} of {no_of_posters}.
+{all_time_url} {last_28_url}
+{aliases_used}""")
+
 
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
