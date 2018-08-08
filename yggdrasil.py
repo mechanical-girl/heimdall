@@ -3,6 +3,7 @@ import time
 import argparse
 import importlib
 import json
+import subprocess
 
 import forseti
 import heimdall
@@ -93,6 +94,14 @@ def main():
                 yggdrasil.disconnect()
                 ygg.stop()
                 main()
+            elif message['data']['content'] == '!deploy @Yggdrasil':
+                try:
+                    subprocess.run(["git", "pull"]).check_returncode()
+                    yggdrasil.disconnect()
+                    ygg.stop()
+                    main()
+                except CalledProcessError:
+                    yggdrasil.send('Pull failed - sorry.',message['data']['id'])
 
 if __name__ == '__main__':
     main()
