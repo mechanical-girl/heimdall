@@ -92,14 +92,14 @@ class Heimdall:
         self.show("Loading files... ")
         
         for key in self.files:
-            self.show("    Loading {}...".format(key), end=' ')
+            self.show(f"    Loading {key}...", end=' ')
             try:
                 if self.files[key].endswith('.json'):
                     with open(self.files[key], 'r') as f:
                         json.loads(f.read())
                 self.show("done.")
             except:
-                self.show('Unable to find file {}, creating (This will need to be manually edited before Heimdall can run successfully)'.format(self.files[key]))
+                self.show(f'Unable to find file {self.files[key]}, creating (This will need to be manually edited before Heimdall can run successfully)')
                 with open(self.files[key], 'w') as f:
                     f.write('[]')
 
@@ -114,7 +114,7 @@ class Heimdall:
                 self.show("done")
             except Exception:
                 self.heimdall.log()
-                self.show("Error creating help text - see 'Heimdall &{}.log' for details.".format(self.room))
+                self.show(f"Error creating help text - see 'Heimdall &{self.room}.log' for details.")
 
         with open(self.files['regex'], 'r') as f:
             self.show("Loading url regex...", end=' ')
@@ -123,7 +123,7 @@ class Heimdall:
                 self.show("done")
             except:
                 self.heimdall.log()
-                self.show("Error reading url regex - see 'Heimdall &{}.log' for details.".format(self.room))
+                self.show(f"Error reading url regex - see 'Heimdall &{self.room}.log' for details.")
 
         with open(self.files['imgur'], 'r') as f:
             self.show("Reading imgur key, creating Imgur client...", end=' ')
@@ -133,7 +133,7 @@ class Heimdall:
                 self.show("done")
             except Exception:
                 self.heimdall.log()
-                self.show("Error reading imgur key - see 'Heimdall &{}.log' for details.".format(self.room))
+                self.show(f"Error reading imgur key - see 'Heimdall &{self.room}.log' for details.")
 
         with open(self.files['block_list'], 'r+') as f:
             try:
@@ -626,8 +626,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
     def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
-        position = self.get_position(user)
-        return("Position {}".format(position))
+        return(f"Position {self.get_position(user)}")
 
     def get_message(self):
         """Gets messages from heim"""
