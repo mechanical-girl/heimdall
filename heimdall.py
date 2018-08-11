@@ -790,4 +790,4 @@ if __name__ == '__main__':
     use_logs = args.use_logs
     verbose = args.verbose
 
-    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
+    main(room, stealth=stealth, new_logs=True, use_logs=use_logs, verbose=verbose)
