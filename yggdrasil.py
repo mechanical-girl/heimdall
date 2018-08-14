@@ -90,22 +90,28 @@ def main():
     with open('_yggdrasil_help.json', 'r') as f:
         yggdrasil.stock_responses['long_help'] = json.loads(f.read())
     yggdrasil.connect()
-    while True:
-        message = yggdrasil.parse()
-        if message['type'] == 'send-event':
-            if message['data']['content'] == '!restart @Yggdrasil':
-                yggdrasil.disconnect()
-                ygg.stop()
-                main()
-                
-            elif message['data']['content'] == '!deploy @Yggdrasil':
-                with open(os.devnull, 'w') as devnull:
-                    if subprocess.run(["git", "pull"], stdout=devnull, stderr=devnull).returncode == 0:
-                        yggdrasil.disconnect()
-                        ygg.stop()
-                        main()
-                    else:
-                        yggdrasil.send('Pull failed - sorry.',message['data']['id'])
+    try:
+        while True:
+            message = yggdrasil.parse()
+            if message['type'] == 'send-event':
+                if message['data']['content'] == '!restart @Yggdrasil':
+                    yggdrasil.disconnect()
+                    ygg.stop()
+                    main()
+                    
+                elif message['data']['content'] == '!deploy @Yggdrasil':
+                    with open(os.devnull, 'w') as devnull:
+                        if subprocess.run(["git", "pull"], stdout=devnull, stderr=devnull).returncode == 0:
+                            yggdrasil.disconnect()
+                            ygg.stop()
+                            main()
+                        else:
+                            yggdrasil.send('Pull failed - sorry.',message['data']['id'])
+    except:
+        yggdrasil.log()
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    finally:
+        pass
