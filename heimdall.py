@@ -781,19 +781,16 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                         self.total_messages_all_time, self.room),
                     message['data']['id'])
 
-                if message['type'] == 'send-reply':
-                    return
+            if message['type'] == 'send-reply':
+                return
 
             if message['data']['content'].split(' ')[0] != "!ignore":
                 self.look_for_room_links(message['data']['content'])
                 urls = self.get_urls(message['data']['content'])
-                summs = [
-                    url for url in urls
-                    if urlparse(url).netloc in self.summarise
-                ]
+                summs = [ url for url in urls if urlparse(url).netloc in self.summarise ]
                 urls = [url for url in urls if not url in summs]
-                self.heimdall.send(
-                    self.get_page_titles(urls), message['data']['id'])
+                self.heimdall.send( self.get_page_titles(urls), message['data']['id'])
+
                 for summ in summs:
                     self.heimdall.send(
                         "{}\n{}".format(
@@ -803,7 +800,8 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                                     "sentences_number": 2
                                 })['sentences'])), message['data']['id'])
 
-                    comm = message['data']['content'].split()
+            comm = message['data']['content'].split()
+
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
                     if len(comm) > 1 and comm[1][0] == "@":
