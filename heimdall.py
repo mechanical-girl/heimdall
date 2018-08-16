@@ -394,13 +394,11 @@ class Heimdall:
                 '''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 values=data)
 
-            def next_day(self, day):
-                """Returns the timestamp of UTC midnight on the day following the timestamp given"""
+    def next_day(self, day):
+        """Returns the timestamp of UTC midnight on the day following the timestamp given"""
 
         one_day = 60 * 60 * 24
-        tomorrow = int(
-            calendar.timegm(datetime.utcfromtimestamp(day).date().timetuple())
-            + one_day)
+        tomorrow = int(calendar.timegm(datetime.utcfromtimestamp(day).date().timetuple()) + one_day)
         return (tomorrow)
 
     def date_from_timestamp(self, timestamp):
