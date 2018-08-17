@@ -509,23 +509,20 @@ class Heimdall:
         with open(self.files['possible_rooms'], 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
 
-    def get_user_stats(self, user, **kwargs):
+    def get_user_stats(self, user, use_aliases):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
         normnick = self.heimdall.normaliseNick(user)
-        strict = not kwargs['aliases'] if 'aliases' in kwargs else True
 
-        if not strict:
-            self.c.execute('''SELECT master FROM aliases WHERE alias = ?''',
-                           (normnick, ))
+        if use_aliases:
+            self.c.execute('''SELECT master FROM aliases WHERE alias = ?''', (normnick, ))
             try:
                 master = self.c.fetchall()[0][0]
             except:
                 master = normnick
-            self.c.execute('''SELECT alias FROM aliases WHERE master = ?''',
-                           (master, ))
+            self.c.execute('''SELECT alias FROM aliases WHERE master = ?''', (master, ))
             reply = self.c.fetchall()
-            if len(reply) == 0:
+            if not reply:
                 aliases_used = f"--aliases was ignored, since no aliases for user {user} are known. To correct, please post `!alias @{user.replace(' ','')}` in any room where @Heimdall is present."
                 aliases = [normnick]
             else:
@@ -795,25 +792,14 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
                     if len(comm) > 1 and comm[1][0] == "@":
-                        aliases = True if len(
-                            comm) == 3 and comm[2] == '--aliases' else False
-                        self.heimdall.send(
-                            self.get_user_stats(comm[1][1:], aliases=aliases),
-                            message['data']['id'])
+                        use_aliases = True if len(comm) == 3 and comm[2] == '--aliases' else False
+                        self.heimdall.send(self.get_user_stats(comm[1][1:], use_aliases), message['data']['id'])
                     elif len(comm) == 2 and comm[1] == '--aliases':
-                        self.heimdall.send(
-                            self.get_user_stats(
-                                message['data']['sender']['name'],
-                                aliases=True), message['data']['id'])
+                        self.heimdall.send(self.get_user_stats(message['data']['sender']['name'], True), message['data']['id'])
                     elif len(comm) == 1:
-                        self.heimdall.send(
-                            self.get_user_stats(
-                                message['data']['sender']['name']),
-                            message['data']['id'])
+                        self.heimdall.send(self.get_user_stats(message['data']['sender']['name'], False), message['data']['id'])
                     else:
-                        self.heimdall.send(
-                            "Sorry, I didn't understand that. Syntax is !stats (--aliases) or !stats @user (--aliases)",
-                            message['data']['id'])
+                        self.heimdall.send("Sorry, I didn't understand that. Syntax is !stats (--aliases) or !stats @user (--aliases)", message['data']['id'])
 
                 elif comm[0] == "!roomstats":
                     if len(comm) > 1:

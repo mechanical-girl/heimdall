@@ -1,5 +1,7 @@
 import unittest
+
 from heimdall import Heimdall
+
 
 class TestParse(unittest.TestCase):
     def generate_packet(self, content):
@@ -41,18 +43,21 @@ class TestParse(unittest.TestCase):
         self.rank_of_user = 0
         self.heimdall.get_user_at_position = self.get_user_at_position
         self.user_at_position = 0
-        self.messages = [[  "!stats",       "!stats blah", "    !stats @Heimdall",          "!stats @ThisUserAintReal"],
-                         [  "!roomstats",   "!roomstats  ",     "!roomstats &xkcd"],
-                         [  "!rank",        "!rank @Heimdall",  "!rank @ThisUserAintReal",  "!rank 42"],
-                         [  "!rank 11",     "!rank a_nice_fish_sandwich",  "!rank 999",     "!rank 0"]]
+        self.messages = [
+                        [   "!stats",           "!stats blah",                  "!stats @Heimdall",             "!stats @ThisUserAintReal"],
+                        [   "!stats --aliases", "!stats blah --aliases",        "!stats --aliases @Heimdall",   "!stats --aliases @ThisUserAintReal"],
+                        [   "!roomstats",       "!roomstats  ",                 "!roomstats &xkcd"],
+                        [   "!rank",            "!rank @Heimdall",              "!rank @ThisUserAintReal",      "!rank 42"],
+                        [   "!rank 11",         "!rank a_nice_fish_sandwich",   "!rank 999",                    "!rank 0"]]
         self.total_messages_all_time = 2
+
     def test_user_stats(self):
         for message in self.messages[0]:
             self.heimdall.parse(self.generate_packet(message))
         assert self.user_stats_results == 3
 
     def test_room_stats(self):
-        for message in self.messages[1]:
+        for message in self.messages[1]: 
             self.heimdall.parse(self.generate_packet(message))
         assert self.room_stats_results == 2 
 

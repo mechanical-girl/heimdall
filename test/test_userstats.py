@@ -13,7 +13,7 @@ class TestUserStats(unittest.TestCase):
         self.heimdall.conn.close()
 
     def test_userstats_no_alias(self):
-        recvd = [line.replace("\t","") for line in self.heimdall.get_user_stats('Pouncy Silverkitten', aliases = False).split('\n') if not line.startswith("First Message Date:")][1:]
+        recvd = [line.replace("\t","") for line in self.heimdall.get_user_stats('Pouncy Silverkitten', aliases=False).split('\n') if not line.startswith("First Message Date:")][1:]
         self.expcd = [  "User:Pouncy Silverkitten",
                         "Messages:117",
                         "Messages Sent Today:0",
