@@ -1,17 +1,23 @@
-`pipenv install`
+heimdall
+======
+___
+![Coverage Badge](coverage.svg) ![Build Badge](https://travis-ci.org/PouncySilverkitten/heimdall.svg?branch=master)
+___
+Heimdall is a monitoring, logging, and statistics generating bot.
 
-`pipenv run python3 main.py &room`
 
---stealth will cause heimdall to not set its own nick. Other flags exist, can be found at the bottom of main.py
+forseti
+======
 
-Running more than one instance (i.e. for more than one room) from the same directory is not currently supported. (This should work if heimdall is run via yggdrasil but at the moment it... doesn't. Some bug somewhere in forseti, probably?)
+__
 
-Aliasing is not entirely reliable.
+__
+Forseti is a database write mediator.
 
-It crashes a lot.
 
-The code is a mess.
+yggdrasil
+======
+__
 
-Karelia is now maintained by kaliumxyz, not me. So use `pipenv uninstall karelia && pipenv install git+https://github.com/kaliumxyz/karelia` to get it.
-
-Oh, and good luck.
+__
+Yggdrasil functions as a parent bot for Heimdall and Forseti.
