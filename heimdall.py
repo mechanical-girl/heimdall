@@ -677,8 +677,8 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 {all_time_url} {last_28_url}
 {aliases_used}""")
 
-        def get_room_stats(self):
-            """Gets and sends stats for rooms"""
+    def get_room_stats(self):
+        """Gets and sends stats for rooms"""
 
         self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''',
                        (self.use_logs, ))
