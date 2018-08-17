@@ -1,0 +1,1 @@
+["/me manages Heimdall\n\n- !deploy @Yggdrasil to fetch the latest code from GitHub and restart all instances     of @Heimdall and Forseti\n- !restart @Yggdrasil to restart all instances of @Heimdall and Forseti\n- !kill @Yggdrasil to kill all instances of @Heimdall."]
