@@ -23,20 +23,19 @@ import string
 import sys
 import time
 import urllib.request
-
-from aylienapiclient import textapi
-from datetime import datetime, timedelta, date
+from datetime import date, datetime
 from datetime import time as dttime
+from datetime import timedelta
 from typing import *
 from urllib.parse import urlparse
 
 import matplotlib.pyplot as plt
 
+import karelia
+import pyimgur
+from aylienapiclient import textapi
 from urlextract import URLExtract
 
-import pyimgur
-
-import karelia
 
 class UpdateDone(Exception):
     """Exception meaning that logs are up to date"""
