@@ -1,22 +1,24 @@
 [[source]]
-
 url = "https://pypi.python.org/simple"
 verify_ssl = true
 name = "pypi"
 
-
 [packages]
-
 pushover = {git = "https://github.com/Wyattjoh/pushover"}
 websocket-client = "*"
-karelia = {git = "https://github.com/pouncysilverkitten/karelia"}
 numpy = "*"
 matplotlib = "*"
 pyimgur = "*"
-nose = "*"
 coverage = "*"
 coverage-badge = "*"
-
+unittest-xml-reporting = "*"
+idna = "*"
+urlextract = "*"
+"unittest2" = "*"
+pylint-badge = {git = "https://github.com/pouncysilverkitten/pylint-badge"}
+requests = "*"
+aylien-apiclient = "*"
+yggdrasil = {git = "https://github.com/pouncysilverkitten/karelia"}
+karelia = {git = "https://github.com/pouncysilverkitten/karelia"}
 
 [dev-packages]
-

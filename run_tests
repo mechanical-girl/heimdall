@@ -1,0 +1,9 @@
+pylint-badge heimdall.py
+mv heimdall.svg data/heimdall/
+git add data/heimdall/heimdall.svg
+clear
+rm coverage.svg
+pipenv run coverage run --omit */.local/* -m unittest discover -s test/ -vv
+pipenv run coverage-badge -o coverage > build.sh
+rm build.sh
+git add coverage.svg

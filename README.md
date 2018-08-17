@@ -12,7 +12,7 @@ forseti
 __
 
 __
-Forseti is a database write mediator
+Forseti is a database write mediator.
 
 
 yggdrasil
@@ -20,4 +20,4 @@ yggdrasil
 __
 
 __
-Yggdrasil functions as a parent bot for Heimdall and Forseti
+Yggdrasil functions as a parent bot for Heimdall and Forseti.

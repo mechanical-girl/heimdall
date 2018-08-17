@@ -1,8 +1,10 @@
 *.db*
 *.log
-Pipfile.lock
 *.json
 *.png
 __pycache__/*
 __pycache__
 test/__pycache__
+!block_list.json
+!help_text.json
+!test_data.db
