@@ -26,7 +26,7 @@ import urllib.request
 from datetime import date, datetime
 from datetime import time as dttime
 from datetime import timedelta
-from typing import *
+from typing import Dict, List, Tuple, Union
 from urllib.parse import urlparse
 
 import matplotlib.pyplot as plt
@@ -65,18 +65,15 @@ class Heimdall:
 
         self.stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else False
-        self.force_new_logs = kwargs[
-            'new_logs'] if 'new_logs' in kwargs else False
-        self.use_logs = kwargs[
-            'use_logs'] if 'use_logs' in kwargs else self.room
+        self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
+        self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
         if room == 'test_data':
             self.show("Testing mode enabled...", end='')
             self.tests = True
-            self.database = os.path.join(BASE_DIR,
-                                         "data/heimdall/test_data.db")
+            self.database = os.path.join(BASE_DIR, "data/heimdall/test_data.db")
             self.show(" done")
         else:
             self.tests = kwargs['test'] if 'test' in kwargs else False
@@ -104,9 +101,7 @@ class Heimdall:
                         json.loads(f.read())
                 self.show("done.")
             except FileNotFoundError:
-                self.show(
-                    f'Unable to find file {self.files[key]}, creating (This will need to be manually edited before Heimdall can run successfully)'
-                )
+                self.show(f'Unable to find file {self.files[key]}, creating (This will need to be manually edited before Heimdall can run successfully)')
                 with open(self.files[key], 'w') as f:
                     f.write('[]')
 
@@ -114,15 +109,10 @@ class Heimdall:
             self.show("Loading help text...", end=' ')
             try:
                 help_text: Dict[str, str] = json.loads(f.read())
-                self.heimdall.stockResponses['shortHelp'] = help_text[
-                    'short_help']
-                self.heimdall.stockResponses['longHelp'] = help_text[
-                    'long_help'].format(self.room)
-                if os.path.basename(
-                        os.path.dirname(
-                            os.path.realpath(__file__))) != "prod-yggdrasil":
-                    self.heimdall.stockResponses[
-                        'longHelp'] += "\nThis is a testing instance and may not be reliable."
+                self.heimdall.stockResponses['shortHelp'] = help_text['short_help']
+                self.heimdall.stockResponses['longHelp'] = help_text['long_help'].format(self.room)
+                if os.path.basename(os.path.dirname(os.path.realpath(__file__))) != "prod-yggdrasil":
+                    self.heimdall.stockResponses['longHelp'] += "\nThis is a testing instance and may not be reliable."
                 self.show("done")
             except Exception:
                 self.heimdall.log()

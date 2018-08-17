@@ -32,8 +32,7 @@ class Yggdrasil:
             "-v", "--verbose", action="store_true", dest="verbose")
         parser.add_argument(
             "--force-new-logs",
-            help=
-            "If enabled, Heimdall will delete any current logs for the room",
+            help = "If enabled, Heimdall will delete any current logs for the room",
             action="store_true",
             dest="new_logs")
         parser.add_argument("--use-logs", type=str, dest="use_logs")
