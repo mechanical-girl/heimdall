@@ -509,25 +509,35 @@ class Heimdall:
         with open(self.files['possible_rooms'], 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
 
+    def get_aliases(self, user):
+        normnick = self.heimdall.normaliseNick(user)
+
+        self.c.execute('''SELECT master FROM aliases WHERE alias = ?''', (normnick, ))
+        try:
+            master = self.c.fetchall()[0][0]
+        except:
+            master = normnick
+        self.c.execute('''SELECT alias FROM aliases WHERE master = ?''', (master, ))
+        reply = self.c.fetchall()
+        if not reply:
+            return []
+        else:
+            return [alias[0] for alias in reply]
+
     def get_user_stats(self, user, use_aliases):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
         normnick = self.heimdall.normaliseNick(user)
 
         if use_aliases:
-            self.c.execute('''SELECT master FROM aliases WHERE alias = ?''', (normnick, ))
-            try:
-                master = self.c.fetchall()[0][0]
-            except:
-                master = normnick
-            self.c.execute('''SELECT alias FROM aliases WHERE master = ?''', (master, ))
-            reply = self.c.fetchall()
-            if not reply:
+            aliases = self.get_aliases(user)
+
+            if not aliases:
                 aliases_used = f"--aliases was ignored, since no aliases for user {user} are known. To correct, please post `!alias @{user.replace(' ','')}` in any room where @Heimdall is present."
                 aliases = [normnick]
             else:
-                aliases = [alias[0] for alias in reply]
                 aliases_used = f"{len(aliases)-1} aliases used."
+
         else:
             aliases_used = "No aliases used."
             aliases = [normnick]
@@ -644,6 +654,8 @@ class Heimdall:
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
 
+        engagement_table = self.get_user_engagement_table(normnick)
+
         # Get requester's position.
         position = self.get_position(normnick)
         self.c.execute(
@@ -661,6 +673,10 @@ Most Recent Message:\t{last_message_sent}
 Average Messages/Day:\t{int(count/number_of_days)}
 Busiest Day:\t\t\t\t{busiest_day[0]}, with {busiest_day[1]} messages
 Ranking:\t\t\t\t\t{position} of {no_of_posters}.
+
+Engagement:
+{engagement_table}
+
 {all_time_url} {last_28_url}
 {aliases_used}""")
 
@@ -740,13 +756,36 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
 
-        return (
-            f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
-        )
+        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
 
     def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
         return (f"Position {self.get_position(user)}")
+
+    def get_user_engagement_table(self, user):
+        normnick = self.heimdall.normaliseNick(user)
+
+        aliases =  self.get_aliases(user)
+        if not aliases:
+            aliases = [normnick]
+
+        # Get all messages by user
+        self.c.execute(f'''SELECT count(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''', (self.use_logs, *aliases,))
+        total_count = self.c.fetchall()[0][0]
+
+        # Get the number of parents per user they replied to
+        self.c.execute(f'''SELECT sendername, COUNT(*) AS count FROM messages WHERE room IS ? AND id IN (SELECT parent FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})) GROUP BY sendername ORDER BY count DESC ''', (self.use_logs, self.use_logs, *aliases,))
+        parents_replied_to = [item for item in self.c.fetchall() if self.heimdall.normaliseNick(item[0]) not in aliases][:10]
+
+        self.c.execute(f'''SELECT count(*) FROM messages WHERE normname IS ? AND parent IN (SELECT id FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}))''', (self.heimdall.normaliseNick(user), self.use_logs, *aliases,))
+        self_replies = self.c.fetchall()[0][0]
+
+        def formatta(tup, total): return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
+        table = ""
+        for pair in parents_replied_to: table += formatta(pair, total_count)
+        table += f"\nSelf-reply rate: {round(self_replies*100/total_count, 2)}"
+
+        return f"{table}"
 
     def get_message(self):
         """Gets messages from heim"""
@@ -890,6 +929,9 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                         self.write_to_database(
                             '''INSERT OR FAIL INTO aliases VALUES(?, ?)''',
                             values=(master_nick, nick))
+
+                elif comm[0] == "!engage":
+                    self.heimdall.send(self.get_user_engagement_table(comm[1][1:]), message['data']['id'])
 
     def main(self):
         """Main loop"""
