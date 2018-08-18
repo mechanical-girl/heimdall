@@ -654,7 +654,7 @@ class Heimdall:
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
 
-        engagement_table = self.get_user_engagement_table(normnick)
+        engagement_table = self.get_user_engagement_table(user)
 
         # Get requester's position.
         position = self.get_position(normnick)
@@ -765,7 +765,7 @@ Engagement:
     def get_user_engagement_table(self, user):
         normnick = self.heimdall.normaliseNick(user)
 
-        aliases =  self.get_aliases(user)
+        aliases = self.get_aliases(user)
         if not aliases:
             aliases = [normnick]
 
