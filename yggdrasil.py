@@ -145,11 +145,14 @@ def main():
                 pass
 
     except Exception:
+        yggdrasil.disconnect()
         yggdrasil.log()
+        ygg.stop()
 
 
 if __name__ == '__main__':
-    try:
-        main()
-    finally:
-        pass
+    while True:
+        try:
+            main()
+        finally:
+            pass
