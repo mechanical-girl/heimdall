@@ -244,12 +244,51 @@ class Heimdall:
         self.check_or_create_tables()
 
     def show(self, *args, **kwargs):
-        """Only print if self.verbose"""
-        if self.verbose:
-            print(*args, **kwargs)
+        """
+        Only print if self.verbose or verbose=True in kwargs
+
+        >>> h = Heimdall('test')
+        >>> h.show('Test', override=True, end='')
+        Test 
+        >>> h.show('Tes', end='t')
+        >>> h.show('Test')
+        >>> h.verbose = True
+        >>> h.show('Test')
+        Test 
+        <BLANKLINE>
+        >>> h.show('Test', override=False)
+        Test 
+        <BLANKLINE>
+        """
+
+        override = True if 'override' in kwargs and kwargs['override'] else False
+        end = kwargs['end'] if 'end' in kwargs else '\n'
+        if self.verbose or override:
+            print(*args, end)
 
     def check_or_create_tables(self):
-        """Tries to create tables. If it fails, assume tables already exist."""
+        """
+        Tries to create tables. If it fails, assume tables already exist.
+        
+        >>> h = Heimdall('test')
+        >>> h.database = '_test.db'
+        >>> import sqlite3
+        >>> c = sqlite3.connect(h.database).cursor()
+        >>> _ = c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        >>> c.fetchall()
+        []
+        >>> h.connect_to_database()
+        >>> h.check_or_create_tables()
+        >>> _ = c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        >>> c.fetchall()
+        [('messages',), ('aliases',)]
+        >>> _ = c.execute('select * from messages')
+        >>> list(map(lambda x: x[0], c.description))
+        ['content', 'id', 'parent', 'senderid', 'sendername', 'normname', 'time', 'room', 'globalid']
+        >>> _ = c.execute('select * from aliases')
+        >>> list(map(lambda x: x[0], c.description))
+        ['master', 'alias']
+        """
         self.write_to_database('''  CREATE TABLE IF NOT EXISTS messages(
                             content text,
                             id text,
