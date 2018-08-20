@@ -55,8 +55,38 @@ class TestDatabaseFunctions(unittest.TestCase):
         c.execute('''SELECT COUNT(*) FROM messages''')
         assert c.fetchall()[0][0] == 2
 
-    def test_func_insert_message_no_parent(self):
+    def test_func_insert_message_data_no_parent(self):
         packet = {'data': {'content': 'This is content', 'id': 'randomid', 'sender': {'id': 'senderid', 'name': 'sendername'}, 'time': '0123456789'}}
+        self.heimdall.connect_to_database()
+        self.heimdall.insert_message(packet)
+
+        conn = sqlite3.connect('_test.db')
+        c = conn.cursor()
+        c.execute('''SELECT COUNT(*) FROM messages''')
+        assert c.fetchall()[0][0] == 1
+
+    def test_func_insert_message_data_with_parent(self):
+        packet = {'data': {'content': 'This is content', 'id': 'randomid', 'parent': 'parentid', 'sender': {'id': 'senderid', 'name': 'sendername'}, 'time': '0123456789'}}
+        self.heimdall.connect_to_database()
+        self.heimdall.insert_message(packet)
+
+        conn = sqlite3.connect('_test.db')
+        c = conn.cursor()
+        c.execute('''SELECT COUNT(*) FROM messages''')
+        assert c.fetchall()[0][0] == 1
+
+    def test_func_insert_message_no_data_no_parent(self):
+        packet = {'content': 'This is content', 'id': 'randomid', 'sender': {'id': 'senderid', 'name': 'sendername'}, 'time': '0123456789'}
+        self.heimdall.connect_to_database()
+        self.heimdall.insert_message(packet)
+
+        conn = sqlite3.connect('_test.db')
+        c = conn.cursor()
+        c.execute('''SELECT COUNT(*) FROM messages''')
+        assert c.fetchall()[0][0] == 1
+
+    def test_func_insert_message_no_data_with_parent(self):
+        packet = {'content': 'This is content', 'id': 'randomid', 'parent': 'parentid', 'sender': {'id': 'senderid', 'name': 'sendername'}, 'time': '0123456789'}
         self.heimdall.connect_to_database()
         self.heimdall.insert_message(packet)
 
