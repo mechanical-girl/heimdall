@@ -67,17 +67,10 @@ class Heimdall:
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
+        self.testing = False
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-        if room == 'test_data':
-            self.show("Testing mode enabled...", end='')
-            self.tests = True
-            self.database = os.path.join(BASE_DIR, "data/heimdall/test_data.db")
-            self.show(" done")
-        else:
-            self.tests = kwargs['test'] if 'test' in kwargs else False
-            self.database = os.path.join(BASE_DIR, "_heimdall.db")
+        self.database = os.path.join(BASE_DIR, "_heimdall.db")
 
         self.heimdall = karelia.newBot('Heimdall', self.room)
 
@@ -168,9 +161,7 @@ class Heimdall:
                 self.show("done")
             except:
                 self.heimdall.log()
-                self.show(
-                    f"Error reading aylien credentials - see 'Heimdall &{self.room}.log for details."
-                )
+                self.show(f"Error reading aylien credentials - see 'Heimdall &{self.room}.log for details.")
 
         with open(self.files["summ_list"], 'r') as f:
             self.show("Loading summarise domains...", end=' ')
@@ -179,9 +170,7 @@ class Heimdall:
                 self.show("done")
             except:
                 self.heimdall.log()
-                self.show(
-                    f"Error reading summarise domain list - see 'Heimdall &{self.room}.log for details."
-                )
+                self.show(f"Error reading summarise domain list - see 'Heimdall &{self.room}.log for details.")
 
         self.extractor = URLExtract()
 
@@ -393,13 +382,13 @@ class Heimdall:
                     self.room + message['data']['id'])
 
         else:
-            if not 'parent' in message:
+            if 'parent' not in message:
                 message['parent'] = ''
             data = (message['content'].replace(
                 '&', '{ampersand}'), message['id'], message['parent'],
-                    message['sender']['id'], message['sender']['name'],
-                    self.heimdall.normaliseNick(message['sender']['name']),
-                    message['time'], self.room, self.room + message['id'])
+                message['sender']['id'], message['sender']['name'],
+                self.heimdall.normaliseNick(message['sender']['name']),
+                message['time'], self.room, self.room + message['id'])
 
         self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data)
 
@@ -451,28 +440,28 @@ class Heimdall:
                 if known_url in url:
                     known_urls.append(url)
 
-        return ([url for url in urls if not url in known_urls])
+        return ([url for url in urls if url not in known_urls])
 
     def get_page_titles(self, urls):
         """
         Gets page titles for the urls passed
 
         >>> h = Heimdall('test')
-        >>> h.get_page_titles(['imgur.com/vKIVbMz'])
-        'Title: Imgur: The magic of the Internet\n'
+        >>> h.testing = True
         >>> h.get_page_titles(['imgur.com/vKIVbMz', 'reddit.com', 'https://focused.af'])
-        'Title: Imgur: The magic of the Internet\nreddit: the front page of the internet\nFocused AF\n'
+        'Title: Imgur: The magic of the Internetreddit: the front page of the internetFocused AF'
+        >>> h.get_page_titles(['imgur.com/vKIVbMz'])
+        'Title: Imgur: The magic of the Internet'
         """
+
         response = ""
         for match in urls:
-            url = 'http://' + match if not '://' in match else match
-            title = str(urllib.request.urlopen(url).read()).split(
-                '<title>')[1].split('</title>')[0]
-            title = html.unescape(
-                codecs.decode(title, 'unicode_escape')).strip()
-            clear_title = title if len(
-                title) <= 75 else '{}...'.format(title[0:72].strip())
-            response += "Title: {}\n".format(clear_title)
+            url = 'http://' + match if '://' not in match else match
+            title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
+            title = html.unescape(codecs.decode(title, 'unicode_escape')).strip()
+            clear_title = title if len(title) <= 75 else '{}...'.format(title[0:72].strip())
+            end = '' if self.testing else '\n'
+            response += f"Title: {clear_title}{end}"
 
         return response
 
