@@ -401,9 +401,7 @@ class Heimdall:
                     self.heimdall.normaliseNick(message['sender']['name']),
                     message['time'], self.room, self.room + message['id'])
 
-            self.write_to_database(
-                '''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                values=data)
+        self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data)
 
     def next_day(self, day):
         """Returns the timestamp of UTC midnight on the day following the timestamp given"""
