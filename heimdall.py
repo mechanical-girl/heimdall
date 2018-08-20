@@ -404,23 +404,44 @@ class Heimdall:
         self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data)
 
     def next_day(self, day):
-        """Returns the timestamp of UTC midnight on the day following the timestamp given"""
+        """
+        Returns the timestamp of UTC midnight on the day following the timestamp given
+ 
+        >>> h = Heimdall('test')
+        >>> import time
+        >>> h.next_day(1534774799)
+        1534809600
+        """
 
         one_day = 60 * 60 * 24
         tomorrow = int(calendar.timegm(datetime.utcfromtimestamp(day).date().timetuple()) + one_day)
         return (tomorrow)
 
     def date_from_timestamp(self, timestamp):
-        """Return human-readable date from timestamp"""
+        """
+        Return human-readable date from timestamp
+
+        >>> h = Heimdall('test')
+        >>> h.date_from_timestamp(1534774799)
+        '2018-08-20'
+        """
         return (datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d"))
 
     def get_urls(self, content):
-        """Gets page titles for urls in content
+        """
+        Gets a list of the urls in content
 
-        Processes the content give, strip all the utls out using regex,
-        remove any in the known_urls list, then get the page title for
-        each, truncating it if necessary, and returning a string
-        containing them all.
+        Processes the content given, remove any in the known_urls list,
+        then return a list of the rest
+
+        >>> h = Heimdall('test')
+        >>> h.block_domains = []
+        >>> h.get_urls('imgur.com/vKIVbMz')
+        ['imgur.com/vKIVbMz']
+        >>> h.get_urls('imgur.com/vKIVbMz reddit.com https://focused.af')
+        ['imgur.com/vKIVbMz', 'reddit.com', 'https://focused.af']
+        >>> h.get_urls('So this.content doesn://t.contain/urls.php')
+        []
         """
 
         urls = self.extractor.find_urls(content)
@@ -433,20 +454,25 @@ class Heimdall:
         return ([url for url in urls if not url in known_urls])
 
     def get_page_titles(self, urls):
+        """
+        Gets page titles for the urls passed
+
+        >>> h = Heimdall('test')
+        >>> h.get_page_titles(['imgur.com/vKIVbMz'])
+        'Title: Imgur: The magic of the Internet\n'
+        >>> h.get_page_titles(['imgur.com/vKIVbMz', 'reddit.com', 'https://focused.af'])
+        'Title: Imgur: The magic of the Internet\nreddit: the front page of the internet\nFocused AF\n'
+        """
         response = ""
-        if len(urls) > 0:
-            for match in urls:
-                try:
-                    url = 'http://' + match if not '://' in match else match
-                    title = str(urllib.request.urlopen(url).read()).split(
-                        '<title>')[1].split('</title>')[0]
-                    title = html.unescape(
-                        codecs.decode(title, 'unicode_escape')).strip()
-                    clear_title = title if len(
-                        title) <= 75 else '{}...'.format(title[0:72].strip())
-                    response += "Title: {}\n".format(clear_title)
-                except:
-                    pass
+        for match in urls:
+            url = 'http://' + match if not '://' in match else match
+            title = str(urllib.request.urlopen(url).read()).split(
+                '<title>')[1].split('</title>')[0]
+            title = html.unescape(
+                codecs.decode(title, 'unicode_escape')).strip()
+            clear_title = title if len(
+                title) <= 75 else '{}...'.format(title[0:72].strip())
+            response += "Title: {}\n".format(clear_title)
 
         return response
 
