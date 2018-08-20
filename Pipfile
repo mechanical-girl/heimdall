@@ -20,5 +20,6 @@ requests = "*"
 aylien-apiclient = "*"
 yggdrasil = {git = "https://github.com/pouncysilverkitten/karelia"}
 karelia = {git = "https://github.com/pouncysilverkitten/karelia"}
+pygount = "*"
 
 [dev-packages]

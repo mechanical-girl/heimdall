@@ -269,26 +269,8 @@ class Heimdall:
     def check_or_create_tables(self):
         """
         Tries to create tables. If it fails, assume tables already exist.
-        
-        >>> h = Heimdall('test')
-        >>> h.database = '_test.db'
-        >>> import sqlite3
-        >>> c = sqlite3.connect(h.database).cursor()
-        >>> _ = c.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        >>> c.fetchall()
-        []
-        >>> h.connect_to_database()
-        >>> h.check_or_create_tables()
-        >>> _ = c.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        >>> c.fetchall()
-        [('messages',), ('aliases',)]
-        >>> _ = c.execute('select * from messages')
-        >>> list(map(lambda x: x[0], c.description))
-        ['content', 'id', 'parent', 'senderid', 'sendername', 'normname', 'time', 'room', 'globalid']
-        >>> _ = c.execute('select * from aliases')
-        >>> list(map(lambda x: x[0], c.description))
-        ['master', 'alias']
         """
+
         self.write_to_database('''  CREATE TABLE IF NOT EXISTS messages(
                             content text,
                             id text,
