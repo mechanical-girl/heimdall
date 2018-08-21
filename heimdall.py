@@ -185,7 +185,7 @@ class Heimdall:
         self.check_or_create_tables()
         self.show("done")
 
-        if not self.tests:
+        if not self.testing:
             self.heimdall.connect(True)
             self.show("Getting logs...")
             self.get_room_logs()
@@ -202,7 +202,7 @@ class Heimdall:
         self.conn.close()
 
         self.show("Ready")
-        if not self.tests:
+        if not self.testing:
             self.heimdall.disconnect()
 
     def write_to_database(self, statement, **kwargs):
@@ -373,6 +373,7 @@ class Heimdall:
         if 'data' in message:
             if 'parent' not in message['data']:
                 message['data']['parent'] = ''
+
             data = (message['data']['content'], message['data']['id'],
                     message['data']['parent'], message['data']['sender']['id'],
                     message['data']['sender']['name'],
@@ -384,13 +385,14 @@ class Heimdall:
         else:
             if 'parent' not in message:
                 message['parent'] = ''
+
             data = (message['content'].replace(
                 '&', '{ampersand}'), message['id'], message['parent'],
                 message['sender']['id'], message['sender']['name'],
                 self.heimdall.normaliseNick(message['sender']['name']),
                 message['time'], self.room, self.room + message['id'])
 
-        self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data)
+        self.write_to_database('''INSERT INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data)
 
     def next_day(self, day):
         """
@@ -448,9 +450,9 @@ class Heimdall:
 
         >>> h = Heimdall('test')
         >>> h.testing = True
-        >>> h.get_page_titles(['imgur.com/vKIVbMz', 'reddit.com', 'https://focused.af'])
+        >>> h.get_page_titles(['imgur.com/vKIVbMz', 'reddit.com', 'https://focused.af']) # doctest: +SKIP
         'Title: Imgur: The magic of the Internetreddit: the front page of the internetFocused AF'
-        >>> h.get_page_titles(['imgur.com/vKIVbMz'])
+        >>> h.get_page_titles(['imgur.com/vKIVbMz']) # doctest: +SKIP
         'Title: Imgur: The magic of the Internet'
         """
 
@@ -534,11 +536,12 @@ class Heimdall:
         return (url)
 
     def look_for_room_links(self, content):
-        """Looks for and saves all possible rooms in message"""
-        new_possible_rooms = set(
-            [room[1:] for room in content.split() if room[0] == '&'])
-        with open(self.files['possible_rooms'], 'r') as f:
-            possible_rooms = set(json.loads(f.read()))
+        """
+        Looks for and saves all possible rooms in message
+
+        """
+        new_possible_rooms = set([room[1:] for room in content.split() if room[0] == '&'])
+        with open(self.files['possible_rooms'], 'r') as f: possible_rooms = set(json.loads(f.read()))
         possible_rooms.union(new_possible_rooms)
         with open(self.files['possible_rooms'], 'w') as f:
             f.write(json.dumps(list(possible_rooms)))
@@ -671,7 +674,7 @@ class Heimdall:
         title = "Messages by {}, last 28 days".format(user)
         data_x = [day[0] for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
-        if self.tests:
+        if self.testing:
             last_28_url = "url_goes_here"
         else:
             last_28_graph = self.graph_data(data_x, data_y, title)
@@ -681,7 +684,7 @@ class Heimdall:
         title = "Messages by {}, all time".format(user)
         data_x = [day[0] for day in days]
         data_y = [day[1] for day in days]
-        if self.tests:
+        if self.testing:
             all_time_url = "url_goes_here"
         else:
             all_time_graph = self.graph_data(data_x, data_y, title)
@@ -773,7 +776,7 @@ Engagement:
         title = "Messages in &{}, last 28 days".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
-        if self.tests:
+        if self.testing:
             last_28_url = 'last_28_url'
         else:
             last_28_graph = self.graph_data(data_x, data_y, title)
@@ -783,7 +786,7 @@ Engagement:
         title = "Messages in &{}, all time".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in messages_by_day]
         data_y = [day[1] for day in messages_by_day]
-        if self.tests:
+        if self.testing:
             all_time_url = 'all_time_url'
         else:
             all_time_graph = self.graph_data(data_x, data_y, title)
