@@ -459,6 +459,7 @@ class Heimdall:
         response = ""
         for match in urls:
             url = 'http://' + match if '://' not in match else match
+            print(url) 
             title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
             title = html.unescape(codecs.decode(title, 'unicode_escape')).strip()
             clear_title = title if len(title) <= 75 else '{}...'.format(title[0:72].strip())
@@ -623,8 +624,8 @@ class Heimdall:
             for x in range(int(earliest[6]), int(time.time()), 60 * 60 * 24)
         ]
 
-        for date in dates:
-            days[date] = 0
+        for _date in dates:
+            days[_date] = 0
 
         for message in daily_messages:
             day = datetime.utcfromtimestamp(message[0]).strftime("%Y-%m-%d")
@@ -633,7 +634,7 @@ class Heimdall:
         try:
             messages_today = days[datetime.utcfromtimestamp(
                 datetime.today().timestamp()).strftime("%Y-%m-%d")]
-        except:
+        except ZeroDivisionError:
             messages_today = 0
         days_by_busyness = [(k, days[k])
                             for k in sorted(days, key=days.get, reverse=True)]
@@ -817,9 +818,11 @@ Engagement:
         self.c.execute(f'''SELECT count(*) FROM messages WHERE normname IS ? AND parent IN (SELECT id FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}))''', (self.heimdall.normaliseNick(user), self.use_logs, *aliases,))
         self_replies = self.c.fetchall()[0][0]
 
-        def formatta(tup, total): return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
+        def formatta(tup, total):
+            return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
         table = ""
-        for pair in parents_replied_to: table += formatta(pair, total_count)
+        for pair in parents_replied_to:
+            table += formatta(pair, total_count)
         table += f"\nSelf-reply rate: {round(self_replies*100/total_count, 2)}"
 
         return f"{table}"
@@ -1007,9 +1010,7 @@ def main(room, **kwargs):
     while True:
         stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
-        use_logs = kwargs[
-            'use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(
-                room) is str else room[0]
+        use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type( room) is str else room[0]
         verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
 
         heimdall = Heimdall(
