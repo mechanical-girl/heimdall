@@ -94,3 +94,21 @@ class TestDatabaseFunctions(unittest.TestCase):
         c = conn.cursor()
         c.execute('''SELECT COUNT(*) FROM messages''')
         assert c.fetchall()[0][0] == 1
+
+    def test_func_check_or_create_tables_no_tables(self):
+        self.heimdall.connect_to_database()
+        conn = sqlite3.connect('_test.db')
+        c = conn.cursor()
+        c.execute('''select name from sqlite_master where type = "table"''')
+        assert c.fetchall() == [('messages',), ('aliases',)]
+
+    def test_func_check_or_create_tables_with_tables(self):
+        self.heimdall.connect_to_database()
+        self.heimdall = heimdall.Heimdall('test')
+        self.heimdall.connect_to_database()
+
+        conn = sqlite3.connect('_test.db')
+        c = conn.cursor()
+        c.execute('''select name from sqlite_master where type = "table"''')
+        assert c.fetchall() == [('messages',), ('aliases',)]
+

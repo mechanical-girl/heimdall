@@ -42,6 +42,11 @@ class UpdateDone(Exception):
     pass
 
 
+class UnknownMode(Exception):
+    """Heimdall.write_to_database() has received an unknown mode"""
+    pass
+
+
 class KillError(Exception):
     """Exception for when the bot is killed."""
     pass
@@ -109,9 +114,7 @@ class Heimdall:
                 self.show("done")
             except Exception:
                 self.heimdall.log()
-                self.show(
-                    f"Error creating help text - see 'Heimdall &{self.room}.log' for details."
-                )
+                self.show(f"Error creating help text - see 'Heimdall &{self.room}.log' for details.")
 
         with open(self.files['regex'], 'r') as f:
             self.show("Loading url regex...", end=' ')
@@ -120,9 +123,7 @@ class Heimdall:
                 self.show("done")
             except:
                 self.heimdall.log()
-                self.show(
-                    f"Error reading url regex - see 'Heimdall &{self.room}.log' for details."
-                )
+                self.show(f"Error reading url regex - see 'Heimdall &{self.room}.log' for details.")
 
         with open(self.files['imgur'], 'r') as f:
             self.show("Reading imgur key, creating Imgur client...", end=' ')
@@ -156,8 +157,7 @@ class Heimdall:
             self.show("Loading aylien credentials...", end=' ')
             try:
                 aylien_creds = json.loads(f.read())
-                self.summariser = textapi.Client(aylien_creds[0],
-                                                 aylien_creds[1])
+                self.summariser = textapi.Client(aylien_creds[0], aylien_creds[1])
                 self.show("done")
             except:
                 self.heimdall.log()
@@ -178,9 +178,7 @@ class Heimdall:
         self.show("Connecting to database...", end=' ')
         if self.force_new_logs:
             self.show("done\nDeleting messages...", end=' ')
-            self.write_to_database(
-                '''DELETE FROM messages WHERE room IS ?''',
-                values=(self.room, ))
+            self.write_to_database('''DELETE FROM messages WHERE room IS ?''', values=(self.room, ))
             self.show("done\nCreating tables...", end=' ')
         self.check_or_create_tables()
         self.show("done")
@@ -192,8 +190,7 @@ class Heimdall:
             self.show("Done.")
 
         try:
-            self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''',
-                           (self.room, ))
+            self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (self.room, ))
             self.total_messages_all_time = self.c.fetchone()[0]
         except:
             self.total_messages_all_time = 0
@@ -210,11 +207,7 @@ class Heimdall:
         mode = kwargs['mode'] if 'mode' in kwargs else "execute"
 
         if self.queue is not None:
-            send = (
-                statement,
-                values,
-                mode,
-            )
+            send = (statement, values, mode,)
             self.queue.put(send)
 
         else:
@@ -223,7 +216,7 @@ class Heimdall:
             elif mode == "executemany":
                 self.c.executemany(statement, values)
             else:
-                pass
+                raise UnknownMode
 
         self.conn.commit()
 
@@ -478,12 +471,10 @@ class Heimdall:
         while True:
             position += 1
             result = self.c.fetchone()
-            if result == None:
-                break
+            if result is None:
+                return "unknown"
             if result[0] == normnick:
-                return (position)
-
-        return ("unknown")
+                return position
 
     def get_user_at_position(self, position):
         """Returns the user at the specified position"""
@@ -582,47 +573,25 @@ class Heimdall:
 
         # Query gets the number of messages sent. `','.join(['?']*len(aliases))` is used so that there are enough question marks for the number of aliases
         self.c.execute(
-            f'''SELECT count(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''',
-            (
-                self.use_logs,
-                *aliases,
-            ))
+            f'''SELECT count(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''', (self.use_logs, *aliases,))
         count = self.c.fetchone()[0]
 
         if count == 0:
             return ('User @{} not found.'.format(user.replace(' ', '')))
 
         # Query gets the earliest message sent
-        self.c.execute(
-            f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time ASC''',
-            (
-                self.use_logs,
-                *aliases,
-            ))
+        self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time ASC''', (self.use_logs, *aliases,))
         earliest = self.c.fetchone()
 
         # Query gets the most recent message sent
-        self.c.execute(
-            '''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time DESC''',
-            (
-                self.use_logs,
-                normnick,
-            ))
+        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time DESC''', (self.use_logs, normnick,))
         latest = self.c.fetchone()
 
         days = {}
-        self.c.execute(
-            '''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''',
-            (
-                self.use_logs,
-                normnick,
-            ))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, normnick,))
         daily_messages = self.c.fetchall()
         days = {}
-        dates = [
-            datetime.utcfromtimestamp(int(x)).strftime("%Y-%m-%d")
-            for x in range(int(earliest[6]), int(time.time()), 60 * 60 * 24)
-        ]
+        dates = [datetime.utcfromtimestamp(int(x)).strftime("%Y-%m-%d") for x in range(int(earliest[6]), int(time.time()), 60 * 60 * 24)]
 
         for _date in dates:
             days[_date] = 0
@@ -635,8 +604,7 @@ class Heimdall:
             messages_today = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
         except KeyError:
             messages_today = 0
-        days_by_busyness = [(k, days[k])
-                            for k in sorted(days, key=days.get, reverse=True)]
+        days_by_busyness = [(k, days[k]) for k in sorted(days, key=days.get, reverse=True)]
         busiest_day = days_by_busyness[0]
 
         # Calculate when the first message was sent, when the most recent message was sent, and the averate messages per day.
@@ -644,14 +612,10 @@ class Heimdall:
         last_message_sent = self.date_from_timestamp(latest[6])
 
         # number_of_days only takes the average of days between the first message and the most recent message
-        number_of_days = (
-            datetime.strptime(last_message_sent, "%Y-%m-%d") -
-            datetime.strptime(first_message_sent, "%Y-%m-%d")).days
+        number_of_days = (datetime.strptime(last_message_sent, "%Y-%m-%d") - datetime.strptime(first_message_sent, "%Y-%m-%d")).days
 
-        days_since_first_message = (datetime.today() - datetime.strptime(
-            first_message_sent, "%Y-%m-%d")).days
-        days_since_last_message = (datetime.today() - datetime.strptime(
-            last_message_sent, "%Y-%m-%d")).days
+        days_since_first_message = (datetime.today() - datetime.strptime(first_message_sent, "%Y-%m-%d")).days
+        days_since_last_message = (datetime.today() - datetime.strptime(last_message_sent, "%Y-%m-%d")).days
 
         if first_message_sent == self.date_from_timestamp(time.time()):
             first_message_sent = "Today"
@@ -662,8 +626,7 @@ class Heimdall:
         if last_message_sent == self.date_from_timestamp(time.time()):
             last_message_sent = "Today"
         else:
-            "{} days ago, on {}".format(last_message_sent,
-                                        days_since_last_message)
+            "{} days ago, on {}".format(last_message_sent, days_since_last_message)
 
             number_of_days = number_of_days if number_of_days > 0 else 1
 
@@ -694,7 +657,7 @@ class Heimdall:
         engagement_table = self.get_user_engagement_table(user)
 
         self.c.execute('''SELECT COUNT(*) from messages WHERE room IS ? AND normname IS ? AND parent IS ?''', (self.use_logs, normnick, '',))
-        tlts = round(self.c.fetchall()[0][0]*100/count, 2)
+        tlts = round((self.c.fetchall()[0][0] * 100) / count, 2)
 
         # Get requester's position.
         position = self.get_position(normnick)
@@ -724,24 +687,19 @@ TLT %:\t{tlts}
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
 
-        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''',
-                       (self.use_logs, ))
+        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
         count = self.c.fetchone()[0]
 
         # Calculate top ten posters of all time
-        self.c.execute(
-            '''SELECT sendername,normname,COUNT(normname) AS freq FROM messages WHERE room IS ? GROUP BY normname ORDER BY freq DESC LIMIT 10''',
-            (self.use_logs, ))
+        self.c.execute('''SELECT sendername,normname,COUNT(normname) AS freq FROM messages WHERE room IS ? GROUP BY normname ORDER BY freq DESC LIMIT 10''', (self.use_logs, ))
         results = self.c.fetchall()
         top_ten = ""
         for i, result in enumerate(results):
-            top_ten += "{:2d}) {:<7}\t{}\n".format(i + 1, int(result[2]),
-                                                   result[0])
+            top_ten += "{:2d}) {:<7}\t{}\n".format(i + 1, int(result[2]), result[0])
 
             # Get activity over the last 28 days
         lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
-        self.c.execute(
-            '''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, lower_bound,))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, lower_bound,))
         last_28_days = self.c.fetchall()
 
         days = last_28_days[:]
@@ -842,9 +800,9 @@ TLT %:\t{tlts}
             if message['data']['content'].split(' ')[0] != "!ignore":
                 self.look_for_room_links(message['data']['content'])
                 urls = self.get_urls(message['data']['content'])
-                summs = [ url for url in urls if urlparse(url).netloc in self.summarise ]
-                urls = [url for url in urls if not url in summs]
-                self.heimdall.send( self.get_page_titles(urls), message['data']['id'])
+                summs = [url for url in urls if urlparse(url).netloc in self.summarise]
+                urls = [url for url in urls if url not in summs]
+                self.heimdall.send(self.get_page_titles(urls), message['data']['id'])
 
                 for summ in summs:
                     self.heimdall.send(
@@ -908,7 +866,7 @@ TLT %:\t{tlts}
                                     "sentences_number": 2
                                 })['sentences']), message['data']['id'])
                         summ_domain = urlparse(comm[1]).netloc
-                        if not summ_domain in self.summarise:
+                        if summ_domain not in self.summarise:
                             with open(self.files["summ_list"], 'r') as f:
                                 self.summarise = json.loads(f.read())
                             self.summarise.append(summ_domain)
@@ -928,25 +886,21 @@ TLT %:\t{tlts}
                     else:
                         nicks = msg['data']['content'].split()[4:]
 
-                    if 'and' in nicks:
+                    try:
                         nicks.remove('and')
-                    if 'you,' in nicks:
+                    except ValueError:
+                        pass
+
+                    try:
                         nicks.remove('you,')
-                        nicks.insert(
-                            0,
-                            self.heimdall.normaliseNick(
-                                msg['data']['content'].split()[2][1:]))
-
-                        nicks = [
-                            self.heimdall.normaliseNick(nick[:-1] if nick[
-                                -1] == ',' else nick) for nick in nicks
-                        ]
-
+                        nicks.insert(0, self.heimdall.normaliseNick(msg['data']['content'].split()[2][1:]))
+                        nicks = [self.heimdall.normaliseNick(nick[:-1] if nick[-1] == ',' else nick) for nick in nicks]
                         master_nick = None
+                    except ValueError:
+                        pass
+
                     for nick in nicks:
-                        self.c.execute(
-                            '''SELECT COUNT(*) FROM aliases WHERE master IS ?''',
-                            (nick, ))
+                        self.c.execute('''SELECT COUNT(*) FROM aliases WHERE master IS ?''', (nick, ))
                         if self.c.fetchall()[0] != 0:
                             master_nick = nick
                             break
@@ -955,9 +909,7 @@ TLT %:\t{tlts}
                         master_nick = nicks[0]
 
                     for nick in nicks:
-                        self.write_to_database(
-                            '''INSERT OR FAIL INTO aliases VALUES(?, ?)''',
-                            values=(master_nick, nick))
+                        self.write_to_database('''INSERT OR FAIL INTO aliases VALUES(?, ?)''', values=(master_nick, nick))
 
                 elif comm[0] == "!engage":
                     self.heimdall.send(self.get_user_engagement_table(comm[1][1:]), message['data']['id'])
@@ -985,12 +937,7 @@ TLT %:\t{tlts}
 
 
 def on_sigint(signum, frame):
-    try:
-        heimdall.conn.commit()
-        heimdall.conn.close()
-        heimdall.heimdall.disconnect()
-    finally:
-        sys.exit()
+    sys.exit()
 
 
 def main(room, **kwargs):
@@ -999,15 +946,10 @@ def main(room, **kwargs):
     while True:
         stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
-        use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type( room) is str else room[0]
+        use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(room) is str else room[0]
         verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
 
-        heimdall = Heimdall(
-            room,
-            stealth=stealth,
-            new_logs=new_logs,
-            use_logs=use_logs,
-            verbose=verbose)
+        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
 
         try:
             heimdall.main()
@@ -1018,16 +960,9 @@ def main(room, **kwargs):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("room", nargs='?')
-    parser.add_argument(
-        "--stealth",
-        help="If enabled, bot will not present on nicklist",
-        action="store_true")
+    parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
-    parser.add_argument(
-        "--force-new-logs",
-        help="If enabled, Heimdall will delete any current logs for the room",
-        action="store_true",
-        dest="new_logs")
+    parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
     parser.add_argument("--use-logs", type=str, dest="use_logs")
     args = parser.parse_args()
 
@@ -1035,11 +970,5 @@ if __name__ == '__main__':
     stealth = args.stealth
     new_logs = args.new_logs
     use_logs = args.use_logs
-    verbose = args.verbose
-
-    main(
-        room,
-        stealth=stealth,
-        new_logs=new_logs,
-        use_logs=use_logs,
-        verbose=verbose)
+    verbose = args.verbose 
+    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
