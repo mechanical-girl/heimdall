@@ -632,9 +632,8 @@ class Heimdall:
             days[day] = message[1]
 
         try:
-            messages_today = days[datetime.utcfromtimestamp(
-                datetime.today().timestamp()).strftime("%Y-%m-%d")]
-        except ZeroDivisionError:
+            messages_today = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
+        except KeyError:
             messages_today = 0
         days_by_busyness = [(k, days[k])
                             for k in sorted(days, key=days.get, reverse=True)]
@@ -694,6 +693,9 @@ class Heimdall:
 
         engagement_table = self.get_user_engagement_table(user)
 
+        self.c.execute('''SELECT COUNT(*) from messages WHERE room IS ? AND normname IS ? AND parent IS ?''', (self.use_logs, normnick, '',))
+        tlts = round(self.c.fetchall()[0][0]*100/count, 2)
+
         # Get requester's position.
         position = self.get_position(normnick)
         self.c.execute(
@@ -714,6 +716,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
 Engagement:
 {engagement_table}
+TLT %:\t{tlts}
 
 {all_time_url} {last_28_url}
 {aliases_used}""")
