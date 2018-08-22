@@ -459,6 +459,7 @@ class Heimdall:
         response = ""
         for match in urls:
             url = 'http://' + match if '://' not in match else match
+            print(url) 
             title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
             title = html.unescape(codecs.decode(title, 'unicode_escape')).strip()
             clear_title = title if len(title) <= 75 else '{}...'.format(title[0:72].strip())
@@ -623,8 +624,8 @@ class Heimdall:
             for x in range(int(earliest[6]), int(time.time()), 60 * 60 * 24)
         ]
 
-        for date in dates:
-            days[date] = 0
+        for _date in dates:
+            days[_date] = 0
 
         for message in daily_messages:
             day = datetime.utcfromtimestamp(message[0]).strftime("%Y-%m-%d")
@@ -633,7 +634,7 @@ class Heimdall:
         try:
             messages_today = days[datetime.utcfromtimestamp(
                 datetime.today().timestamp()).strftime("%Y-%m-%d")]
-        except:
+        except ZeroDivisionError:
             messages_today = 0
         days_by_busyness = [(k, days[k])
                             for k in sorted(days, key=days.get, reverse=True)]
@@ -737,30 +738,18 @@ Engagement:
             # Get activity over the last 28 days
         lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
         self.c.execute(
-            '''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''',
-            (
-                self.use_logs,
-                lower_bound,
-            ))
+            '''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, lower_bound,))
         last_28_days = self.c.fetchall()
+
         days = last_28_days[:]
+        last_28_days = []
         for day in days:
-            last_28_days.append((
-                self.next_day(day[0]) - 60 * 60 * 24,
-                day[1],
-            ))
-        days = last_28_days[:]
-        for day in days:
-            last_28_days.append((
-                self.next_day(day[0]) - 60 * 60 * 24,
-                day[1],
-            ))
-            last_28_days.remove(day)
-        per_day_last_four_weeks = int(
-            sum([count[1] for count in last_28_days]) / 28)
+            last_28_days.append((self.next_day(day[0]) - 60 * 60 * 24, day[1],))
+
+        per_day_last_four_weeks = int(sum([count[1] for count in last_28_days]) / 28)
         last_28_days.sort(key=operator.itemgetter(1))
-        busiest = (datetime.utcfromtimestamp(
-            last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+
+        busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
         last_28_days.sort(key=operator.itemgetter(0))
 
         midnight = calendar.timegm(datetime.utcnow().date().timetuple())
@@ -768,9 +757,7 @@ Engagement:
         if midnight in [tup[0] for tup in last_28_days]:
             messages_today = dict(last_28_days)[midnight]
 
-        self.c.execute(
-            '''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''',
-            (self.use_logs, ))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (self.use_logs, ))
         messages_by_day = self.c.fetchall()
 
         title = "Messages in &{}, last 28 days".format(self.use_logs)
@@ -817,9 +804,11 @@ Engagement:
         self.c.execute(f'''SELECT count(*) FROM messages WHERE normname IS ? AND parent IN (SELECT id FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}))''', (self.heimdall.normaliseNick(user), self.use_logs, *aliases,))
         self_replies = self.c.fetchall()[0][0]
 
-        def formatta(tup, total): return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
+        def formatta(tup, total):
+            return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
         table = ""
-        for pair in parents_replied_to: table += formatta(pair, total_count)
+        for pair in parents_replied_to:
+            table += formatta(pair, total_count)
         table += f"\nSelf-reply rate: {round(self_replies*100/total_count, 2)}"
 
         return f"{table}"
@@ -1007,9 +996,7 @@ def main(room, **kwargs):
     while True:
         stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
-        use_logs = kwargs[
-            'use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(
-                room) is str else room[0]
+        use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type( room) is str else room[0]
         verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
 
         heimdall = Heimdall(
