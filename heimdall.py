@@ -738,30 +738,18 @@ Engagement:
             # Get activity over the last 28 days
         lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
         self.c.execute(
-            '''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''',
-            (
-                self.use_logs,
-                lower_bound,
-            ))
+            '''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, lower_bound,))
         last_28_days = self.c.fetchall()
+
         days = last_28_days[:]
+        last_28_days = []
         for day in days:
-            last_28_days.append((
-                self.next_day(day[0]) - 60 * 60 * 24,
-                day[1],
-            ))
-        days = last_28_days[:]
-        for day in days:
-            last_28_days.append((
-                self.next_day(day[0]) - 60 * 60 * 24,
-                day[1],
-            ))
-            last_28_days.remove(day)
-        per_day_last_four_weeks = int(
-            sum([count[1] for count in last_28_days]) / 28)
+            last_28_days.append((self.next_day(day[0]) - 60 * 60 * 24, day[1],))
+
+        per_day_last_four_weeks = int(sum([count[1] for count in last_28_days]) / 28)
         last_28_days.sort(key=operator.itemgetter(1))
-        busiest = (datetime.utcfromtimestamp(
-            last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+
+        busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
         last_28_days.sort(key=operator.itemgetter(0))
 
         midnight = calendar.timegm(datetime.utcnow().date().timetuple())
@@ -769,9 +757,7 @@ Engagement:
         if midnight in [tup[0] for tup in last_28_days]:
             messages_today = dict(last_28_days)[midnight]
 
-        self.c.execute(
-            '''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''',
-            (self.use_logs, ))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (self.use_logs, ))
         messages_by_day = self.c.fetchall()
 
         title = "Messages in &{}, last 28 days".format(self.use_logs)
