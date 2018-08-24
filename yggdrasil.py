@@ -24,17 +24,9 @@ class Yggdrasil:
     def __init__(self):
         parser = argparse.ArgumentParser()
         parser.add_argument("room", nargs='?')
-        parser.add_argument(
-            "--stealth",
-            help="If enabled, bot will not present on nicklist",
-            action="store_true")
-        parser.add_argument(
-            "-v", "--verbose", action="store_true", dest="verbose")
-        parser.add_argument(
-            "--force-new-logs",
-            help = "If enabled, Heimdall will delete any current logs for the room",
-            action="store_true",
-            dest="new_logs")
+        parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
+        parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
+        parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
         parser.add_argument("--use-logs", type=str, dest="use_logs")
         args = parser.parse_args()
 
@@ -56,29 +48,16 @@ class Yggdrasil:
         self.instances.append(instance)
 
         for room in self.rooms:
-            instance = mp.Process(
-                target=self.run_heimdall,
-                args=(room, self.stealth, self.new_logs, self.use_logs,
-                      self.verbose, self.queue))
+            instance = mp.Process(target=self.run_heimdall, args=(room, self.stealth, self.new_logs, self.use_logs, self.verbose, self.queue))
             instance.daemon = True
             instance.name = room
             self.instances.append(instance)
 
     def run_heimdall(self, room, stealth, new_logs, use_logs, verbose, queue):
         if room == "test":
-            heimdall.main(
-                (room, queue),
-                stealth=stealth,
-                new_logs=new_logs,
-                use_logs="xkcd",
-                verbose=verbose)
+            heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs="xkcd", verbose=verbose)
         else:
-            heimdall.main(
-                (room, queue),
-                stealth=stealth,
-                new_logs=new_logs,
-                use_logs=use_logs,
-                verbose=verbose)
+            heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
 
     def run_forseti(self):
         forseti.main(self.queue)
@@ -132,15 +111,12 @@ def main():
 
                     elif message['data']['content'] == '!deploy @Yggdrasil':
                         with open(os.devnull, 'w') as devnull:
-                            if subprocess.run(
-                                ["git", "pull"], stdout=devnull,
-                                    stderr=devnull).returncode == 0:
+                            if subprocess.run( ["git", "pull"], stdout=devnull, stderr=devnull).returncode == 0:
                                 yggdrasil.disconnect()
                                 ygg.stop()
                                 main()
                             else:
-                                yggdrasil.send('Pull failed - sorry.',
-                                               message['data']['id'])
+                                yggdrasil.send('Pull failed - sorry.', message['data']['id'])
             except TypeError:
                 pass
 
@@ -148,6 +124,9 @@ def main():
         yggdrasil.disconnect()
         yggdrasil.log()
         ygg.stop()
+
+    finally:
+        time.sleep(1)
 
 
 if __name__ == '__main__':

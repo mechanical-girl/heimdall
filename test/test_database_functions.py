@@ -56,7 +56,7 @@ class TestDatabaseFunctions(unittest.TestCase):
         assert c.fetchall()[0][0] == 2
 
     def test_func_insert_message_data_no_parent(self):
-        packet = {'data': {'content': 'This is content', 'id': 'randomid', 'sender': {'id': 'senderid', 'name': 'sendername'}, 'time': '0123456789'}}
+        packet = {'content': 'This is content', 'id': 'randomid', 'sender': {'id': 'senderid', 'name': 'sendername'}, 'time': '0123456789'}
         self.heimdall.connect_to_database()
         self.heimdall.insert_message(packet)
 
@@ -66,7 +66,7 @@ class TestDatabaseFunctions(unittest.TestCase):
         assert c.fetchall()[0][0] == 1
 
     def test_func_insert_message_data_with_parent(self):
-        packet = {'data': {'content': 'This is content', 'id': 'randomid', 'parent': 'parentid', 'sender': {'id': 'senderid', 'name': 'sendername'}, 'time': '0123456789'}}
+        packet = {'content': 'This is content', 'id': 'randomid', 'parent': 'parentid', 'sender': {'id': 'senderid', 'name': 'sendername'}, 'time': '0123456789'}
         self.heimdall.connect_to_database()
         self.heimdall.insert_message(packet)
 
@@ -94,3 +94,21 @@ class TestDatabaseFunctions(unittest.TestCase):
         c = conn.cursor()
         c.execute('''SELECT COUNT(*) FROM messages''')
         assert c.fetchall()[0][0] == 1
+
+    def test_func_check_or_create_tables_no_tables(self):
+        self.heimdall.connect_to_database()
+        conn = sqlite3.connect('_test.db')
+        c = conn.cursor()
+        c.execute('''select name from sqlite_master where type = "table"''')
+        assert c.fetchall() == [('messages',), ('aliases',)]
+
+    def test_func_check_or_create_tables_with_tables(self):
+        self.heimdall.connect_to_database()
+        self.heimdall = heimdall.Heimdall('test')
+        self.heimdall.connect_to_database()
+
+        conn = sqlite3.connect('_test.db')
+        c = conn.cursor()
+        c.execute('''select name from sqlite_master where type = "table"''')
+        assert c.fetchall() == [('messages',), ('aliases',)]
+
