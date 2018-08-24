@@ -834,20 +834,18 @@ TLT %:\t{tlts}
                     if '\n' in msg.data.content:
                         nicks = msg.data.content.split('\n')[1].split()[5:]
                     else:
-                        nicks = [nick[:-1] if nick.endswith(',') else nick for nicks in msg.data.content.split()[4:]]
+                        nicks = [nick for nick in msg.data.content.split()[4:]]
 
-                    try:
-                        nicks.remove('and')
-                    except ValueError:
-                        pass
+                    if nicks[-2] == "and":
+                        nicks.pop(len(nicks)-2)
 
-                    try:
-                        nicks.remove('you,')
-                        nicks.insert(0, self.heimdall.normalise_nick(msg.data.content.split()[2][1:]))
-                        nicks = [self.heimdall.normalise_nick(nick[:-1] if nick.endswith(',') else nick) for nick in nicks]
-                        master_nick = None
-                    except ValueError:
-                        pass
+                    nicks = [nick[:-1] for nick in nicks[:-1]] + [nicks[-1]]
+
+                    if nicks[0] == "you":
+                        del nicks[0]
+                        nicks.append(message.data.sender.name)
+
+                    master_nick = None
 
                     for nick in nicks:
                         self.c.execute('''SELECT COUNT(*) FROM aliases WHERE master IS ?''', (nick, ))
@@ -859,7 +857,10 @@ TLT %:\t{tlts}
                         master_nick = nicks[0]
 
                     for nick in nicks:
-                        self.write_to_database('''INSERT OR FAIL INTO aliases VALUES(?, ?)''', values=(master_nick, nick))
+                        try:
+                            self.write_to_database('''INSERT INTO aliases VALUES(?, ?)''', values=(master_nick, nick))
+                        except sqlite3.IntegrityError:
+                            pass
 
                 elif comm[0] == "!engage":
                     self.heimdall.send(self.get_user_engagement_table(comm[1][1:]), message.data.id)

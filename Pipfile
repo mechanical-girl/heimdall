@@ -19,5 +19,6 @@ pylint-badge = {git = "https://github.com/pouncysilverkitten/pylint-badge"}
 requests = "*"
 aylien-apiclient = "*"
 pygount = "*"
+karelia = "*"
 
 [dev-packages]

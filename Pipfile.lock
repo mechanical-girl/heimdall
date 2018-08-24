@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "253073f79b1b375bac150a60b149be36e14954238be7028d8faa843ae82a7ea5"
+            "sha256": "b3c97fb39c0d8b71b0e7761b0f29ca357f118e2297942edf3aaea55db988da6c"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -107,6 +107,14 @@
             ],
             "index": "pypi",
             "version": "==2.7"
+        },
+        "karelia": {
+            "hashes": [
+                "sha256:4b3113e8261a4ec7d79c9f3cd3fff920848632009a20bc1dbcd749fb8544cafa",
+                "sha256:cf45bfa7d9e66e9090fe3eb92fd57d2ac424be6046a208d6ea6056c1517f93e3"
+            ],
+            "index": "pypi",
+            "version": "==2.0.14"
         },
         "kiwisolver": {
             "hashes": [
