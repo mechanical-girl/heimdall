@@ -18,8 +18,6 @@ urlextract = "*"
 pylint-badge = {git = "https://github.com/pouncysilverkitten/pylint-badge"}
 requests = "*"
 aylien-apiclient = "*"
-yggdrasil = {git = "https://github.com/pouncysilverkitten/karelia"}
 pygount = "*"
-karelia = "*"
 
 [dev-packages]
