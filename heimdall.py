@@ -361,7 +361,8 @@ class Heimdall:
             if 'parent' not in message:
                 message['parent'] = ''
 
-            data = (message['content'].replace( '&', '{ampersand}'), message['id'], message['parent'],
+            print(message.keys())
+            data = (message['content'].replace('&', '{ampersand}'), message['id'], message['parent'],
                     message['sender']['id'], message['sender']['name'],
                     self.heimdall.normalise_nick(message['sender']['name']),
                     message['time'], self.room, self.room + message['id'])
