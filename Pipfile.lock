@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "6d3cae2491dbb29645c25cdd6f9d605cbc139b852c1f9fd4007612e8727887f7"
+            "sha256": "b3c97fb39c0d8b71b0e7761b0f29ca357f118e2297942edf3aaea55db988da6c"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -110,11 +110,11 @@
         },
         "karelia": {
             "hashes": [
-                "sha256:5df450131e27d9da038dc0ff990594e2f56cc1db0926e89b4f91f3647437fb0a",
-                "sha256:892ce0ce65c4db917257d2829ebca866c7b6ef645bae1f1927abb899c9f4f235"
+                "sha256:4b3113e8261a4ec7d79c9f3cd3fff920848632009a20bc1dbcd749fb8544cafa",
+                "sha256:cf45bfa7d9e66e9090fe3eb92fd57d2ac424be6046a208d6ea6056c1517f93e3"
             ],
             "index": "pypi",
-            "version": "==2.0.7"
+            "version": "==2.0.14"
         },
         "kiwisolver": {
             "hashes": [
@@ -336,10 +336,6 @@
             ],
             "index": "pypi",
             "version": "==0.51.0"
-        },
-        "yggdrasil": {
-            "git": "https://github.com/pouncysilverkitten/karelia",
-            "ref": "110cc4e139953061896b43dae45028f2c7a6d20e"
         }
     },
     "develop": {}
