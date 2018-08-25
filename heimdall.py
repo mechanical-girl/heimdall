@@ -29,9 +29,9 @@ from datetime import timedelta
 from typing import Dict, List, Tuple, Union
 from urllib.parse import urlparse
 
+import karelia
 import matplotlib.pyplot as plt
 
-import karelia
 import pyimgur
 from aylienapiclient import textapi
 from urlextract import URLExtract
@@ -263,7 +263,7 @@ class Heimdall:
                             globalid text
                         )''')
         self.write_to_database('''CREATE UNIQUE INDEX IF NOT EXISTS globalid ON messages(globalid)''')
-        self.write_to_database('''CREATE TABLE IF NOT EXISTS aliases(master text, alias text)''')
+        self.write_to_database('''CREATE TABLE IF NOT EXISTS aliases(master text, alias text, normname text)''')
         self.write_to_database('''CREATE UNIQUE INDEX IF NOT EXISTS master ON aliases(alias)''')
 
     def get_room_logs(self):
@@ -858,7 +858,8 @@ TLT %:\t{tlts}
 
                     for nick in nicks:
                         try:
-                            self.write_to_database('''INSERT INTO aliases VALUES(?, ?)''', values=(master_nick, nick))
+                            normnick = self.heimdall.normalise_nick(nick)
+                            self.write_to_database('''INSERT INTO aliases VALUES(?, ?, ?)''', values=(master_nick, nick, normnick))
                         except sqlite3.IntegrityError:
                             pass
 
