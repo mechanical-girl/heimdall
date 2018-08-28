@@ -101,24 +101,21 @@ def main():
 
     try:
         while True:
-            try:
-                message = yggdrasil.parse()
-                if message.type == 'send-event':
-                    if message.data.content == '!restart @Yggdrasil':
-                        yggdrasil.disconnect()
-                        ygg.stop()
-                        main()
+            message = yggdrasil.parse()
+            if message.type == 'send-event':
+                if message.data.content == '!restart @Yggdrasil':
+                    yggdrasil.disconnect()
+                    ygg.stop()
+                    main()
 
-                    elif message.data.content == '!deploy @Yggdrasil':
-                        with open(os.devnull, 'w') as devnull:
-                            if subprocess.run( ["git", "pull"], stdout=devnull, stderr=devnull).returncode == 0:
-                                yggdrasil.disconnect()
-                                ygg.stop()
-                                main()
-                            else:
-                                yggdrasil.send('Pull failed - sorry.', message.data.id)
-            except TypeError:
-                pass
+                elif message.data.content == '!deploy @Yggdrasil':
+                    with open(os.devnull, 'w') as devnull:
+                        if subprocess.run(["git", "pull"], stdout=devnull, stderr=devnull).returncode == 0:
+                            yggdrasil.disconnect()
+                            ygg.stop()
+                            main()
+                        else:
+                            yggdrasil.send('Pull failed - sorry.', message.data.id)
 
     except Exception:
         yggdrasil.disconnect()
