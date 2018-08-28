@@ -361,7 +361,6 @@ class Heimdall:
             if 'parent' not in message:
                 message['parent'] = ''
 
-            print(message.keys())
             data = (message['content'].replace('&', '{ampersand}'), message['id'], message['parent'],
                     message['sender']['id'], message['sender']['name'],
                     self.heimdall.normalise_nick(message['sender']['name']),
@@ -434,7 +433,6 @@ class Heimdall:
         response = ""
         for match in urls:
             url = 'http://' + match if '://' not in match else match
-            print(url) 
             title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
             title = html.unescape(codecs.decode(title, 'unicode_escape')).strip()
             clear_title = title if len(title) <= 75 else '{}...'.format(title[0:72].strip())
@@ -519,7 +517,7 @@ class Heimdall:
     def get_aliases(self, user):
         normnick = self.heimdall.normalise_nick(user)
 
-        self.c.execute('''SELECT master FROM aliases WHERE alias = ?''', (normnick, ))
+        self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick, ))
         try:
             master = self.c.fetchall()[0][0]
         except:
@@ -531,13 +529,13 @@ class Heimdall:
         else:
             return [alias[0] for alias in reply]
 
-    def get_user_stats(self, user, use_aliases):
+    def get_user_stats(self, user, options):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
         normnick = self.heimdall.normalise_nick(user)
 
-        if use_aliases:
-            aliases = self.get_aliases(user)
+        if 'aliases' in options:
+            aliases = [self.heimdall.normalise_nick(nick) for nick in self.get_aliases(user)]
 
             if not aliases:
                 aliases_used = f"--aliases was ignored, since no aliases for user {user} are known. To correct, please post `!alias @{user.replace(' ','')}` in any room where @Heimdall is present."
@@ -550,102 +548,99 @@ class Heimdall:
             aliases = [normnick]
 
         # Query gets the number of messages sent. `','.join(['?']*len(aliases))` is used so that there are enough question marks for the number of aliases
-        self.c.execute(
-            f'''SELECT count(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''', (self.use_logs, *aliases,))
+        self.c.execute(f'''SELECT count(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))})''', (self.use_logs, *aliases,))
         count = self.c.fetchone()[0]
 
         if count == 0:
             return ('User @{} not found.'.format(user.replace(' ', '')))
 
-        # Query gets the earliest message sent
-        self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time ASC''', (self.use_logs, *aliases,))
-        earliest = self.c.fetchone()
+        if options == ['aliases']:
+            return "No options specified. Please only use --aliases in conjunction with --messages, --engagement, --tlts, or a combination thereof."
 
-        # Query gets the most recent message sent
-        self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time DESC''', (self.use_logs, normnick,))
-        latest = self.c.fetchone()
+        if 'messages' in options:
+            # Query gets the earliest message sent
+            self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time ASC''', (self.use_logs, *aliases,))
+            earliest = self.c.fetchone()
 
-        days = {}
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, normnick,))
-        daily_messages = self.c.fetchall()
-        days = {}
-        dates = [datetime.utcfromtimestamp(int(x)).strftime("%Y-%m-%d") for x in range(int(earliest[6]), int(time.time()), 60 * 60 * 24)]
+            # Query gets the most recent message sent
+            self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IS ? ORDER BY time DESC''', (self.use_logs, normnick,))
+            latest = self.c.fetchone()
 
-        for _date in dates:
-            days[_date] = 0
+            days = {}
+            self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IS ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, normnick,))
+            daily_messages = self.c.fetchall()
+            days = {}
+            dates = [datetime.utcfromtimestamp(int(x)).strftime("%Y-%m-%d") for x in range(int(earliest[6]), int(time.time()), 60 * 60 * 24)]
 
-        for message in daily_messages:
-            day = datetime.utcfromtimestamp(message[0]).strftime("%Y-%m-%d")
-            days[day] = message[1]
+            for _date in dates:
+                days[_date] = 0
 
-        try:
-            messages_today = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
-        except KeyError:
-            messages_today = 0
-        days_by_busyness = [(k, days[k]) for k in sorted(days, key=days.get, reverse=True)]
-        busiest_day = days_by_busyness[0]
+            for message in daily_messages:
+                day = datetime.utcfromtimestamp(message[0]).strftime("%Y-%m-%d")
+                days[day] = message[1]
 
-        # Calculate when the first message was sent, when the most recent message was sent, and the averate messages per day.
-        first_message_sent = self.date_from_timestamp(earliest[6])
-        last_message_sent = self.date_from_timestamp(latest[6])
+            try:
+                messages_today = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
+            except KeyError:
+                messages_today = 0
+            days_by_busyness = [(k, days[k]) for k in sorted(days, key=days.get, reverse=True)]
+            busiest_day = days_by_busyness[0]
 
-        # number_of_days only takes the average of days between the first message and the most recent message
-        number_of_days = (datetime.strptime(last_message_sent, "%Y-%m-%d") - datetime.strptime(first_message_sent, "%Y-%m-%d")).days
+            # Calculate when the first message was sent, when the most recent message was sent, and the averate messages per day.
+            first_message_sent = self.date_from_timestamp(earliest[6])
+            last_message_sent = self.date_from_timestamp(latest[6])
 
-        days_since_first_message = (datetime.today() - datetime.strptime(first_message_sent, "%Y-%m-%d")).days
-        days_since_last_message = (datetime.today() - datetime.strptime(last_message_sent, "%Y-%m-%d")).days
+            # number_of_days only takes the average of days between the first message and the most recent message
+            number_of_days = (datetime.strptime(last_message_sent, "%Y-%m-%d") - datetime.strptime(first_message_sent, "%Y-%m-%d")).days
 
-        if first_message_sent == self.date_from_timestamp(time.time()):
-            first_message_sent = "Today"
-        else:
-            "{} days ago, on {}".format(first_message_sent,
-                                        days_since_first_message)
+            days_since_first_message = (datetime.today() - datetime.strptime(first_message_sent, "%Y-%m-%d")).days
+            days_since_last_message = (datetime.today() - datetime.strptime(last_message_sent, "%Y-%m-%d")).days
 
-        if last_message_sent == self.date_from_timestamp(time.time()):
-            last_message_sent = "Today"
-        else:
-            "{} days ago, on {}".format(last_message_sent, days_since_last_message)
+            if first_message_sent == self.date_from_timestamp(time.time()):
+                first_message_sent = "Today"
+            else:
+                "{} days ago, on {}".format(first_message_sent,
+                                            days_since_first_message)
 
-            number_of_days = number_of_days if number_of_days > 0 else 1
+            if last_message_sent == self.date_from_timestamp(time.time()):
+                last_message_sent = "Today"
+            else:
+                "{} days ago, on {}".format(last_message_sent, days_since_last_message)
 
-        days = sorted(days.items())
+                number_of_days = number_of_days if number_of_days > 0 else 1
 
-        last_28_days = days[-28:]
+            days = sorted(days.items())
 
-        title = "Messages by {}, last 28 days".format(user)
-        data_x = [day[0] for day in last_28_days]
-        data_y = [day[1] for day in last_28_days]
-        if self.testing:
-            last_28_url = "url_goes_here"
-        else:
-            last_28_graph = self.graph_data(data_x, data_y, title)
-            last_28_file = self.save_graph(last_28_graph)
-            last_28_url = self.upload_and_delete_graph(last_28_file)
+            last_28_days = days[-28:]
 
-        title = "Messages by {}, all time".format(user)
-        data_x = [day[0] for day in days]
-        data_y = [day[1] for day in days]
-        if self.testing:
-            all_time_url = "url_goes_here"
-        else:
-            all_time_graph = self.graph_data(data_x, data_y, title)
-            all_time_file = self.save_graph(all_time_graph)
-            all_time_url = self.upload_and_delete_graph(all_time_file)
+            title = "Messages by {}, last 28 days".format(user)
+            data_x = [day[0] for day in last_28_days]
+            data_y = [day[1] for day in last_28_days]
+            if self.testing:
+                last_28_url = "url_goes_here"
+            else:
+                last_28_graph = self.graph_data(data_x, data_y, title)
+                last_28_file = self.save_graph(last_28_graph)
+                last_28_url = self.upload_and_delete_graph(last_28_file)
 
-        engagement_table = self.get_user_engagement_table(user)
+            title = "Messages by {}, all time".format(user)
+            data_x = [day[0] for day in days]
+            data_y = [day[1] for day in days]
+            if self.testing:
+                all_time_url = "url_goes_here"
+            else:
+                all_time_graph = self.graph_data(data_x, data_y, title)
+                all_time_file = self.save_graph(all_time_graph)
+                all_time_url = self.upload_and_delete_graph(all_time_file)
 
-        self.c.execute('''SELECT COUNT(*) from messages WHERE room IS ? AND normname IS ? AND parent IS ?''', (self.use_logs, normnick, '',))
-        tlts = round((self.c.fetchall()[0][0] * 100) / count, 2)
+            # Get requester's position.
+            position = self.get_position(normnick)
+            self.c.execute(
+                '''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''',
+                (self.use_logs, ))
+            no_of_posters = self.c.fetchone()[0]
 
-        # Get requester's position.
-        position = self.get_position(normnick)
-        self.c.execute(
-            '''SELECT COUNT(normname) FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''',
-            (self.use_logs, ))
-        no_of_posters = self.c.fetchone()[0]
-        # Collate and send the lot.
-        return (f"""
-User:\t\t\t\t\t{user}
+            message_results = f"""User:\t\t\t\t\t{user}
 Messages:\t\t\t\t{count}
 Messages Sent Today:\t\t{messages_today}
 First Message Date:\t\t{first_message_sent}
@@ -654,13 +649,25 @@ Most Recent Message:\t{last_message_sent}
 Average Messages/Day:\t{int(count/number_of_days)}
 Busiest Day:\t\t\t\t{busiest_day[0]}, with {busiest_day[1]} messages
 Ranking:\t\t\t\t\t{position} of {no_of_posters}.
+{all_time_url} {last_28_url}\n\n"""
 
-Engagement:
-{engagement_table}
-TLT %:\t{tlts}
+        else:
+            message_results = ""
 
-{all_time_url} {last_28_url}
-{aliases_used}""")
+        if 'engagement' in options: 
+            engagement_results = f"User engagement:\n{self.get_user_engagement_table(user)}\n\n"
+        else:
+            engagement_results = ""
+
+        if 'text' in options:
+            self.c.execute('''SELECT COUNT(*) from messages WHERE room IS ? AND normname IS ? AND parent IS ?''', (self.use_logs, normnick, '',))
+            tlts = round((self.c.fetchall()[0][0] * 100) / count, 2)
+            text_results = f"TLTs %:\t{tlts}\n\n"
+        else:
+            text_results = ""
+
+        # Collate and send the lot.
+        return (f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
 
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
@@ -728,7 +735,7 @@ TLT %:\t{tlts}
     def get_user_engagement_table(self, user):
         normnick = self.heimdall.normalise_nick(user)
 
-        aliases = self.get_aliases(user)
+        aliases = [self.heimdall.normalise_nick(nick) for nick in self.get_aliases(user)]
         if not aliases:
             aliases = [normnick]
 
@@ -763,6 +770,17 @@ TLT %:\t{tlts}
         return (message)
 
     def parse_options(self, options_list):
+        options = []
+        for arg in options_list:
+            if arg in ['-a', '--aliases']:
+                options.append('aliases')
+            if arg in ['-m', '--messages']:
+                options.append('messages')
+            elif arg in ['-e', '--engagement']:
+                options.append('engagement')
+            elif arg in ['-t', '--text']:
+                options.append('text')
+
         return options
 
     def parse(self, message):
@@ -790,15 +808,16 @@ TLT %:\t{tlts}
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
                     options = self.parse_options(comm[1:])
+
+                    if len(options) == 0:
+                        options = ['messages', 'engagement', 'reply']
+
                     if len(comm) > 1 and comm[1][0] == "@":
-                        use_aliases = True if len(comm) == 3 and comm[2] == '--aliases' else False
-                        self.heimdall.reply(self.get_user_stats(comm[1][1:], use_aliases))
-                    elif len(comm) == 2 and comm[1] == '--aliases':
-                        self.heimdall.reply(self.get_user_stats(message.data.sender.name, True))
-                    elif len(comm) == 1:
-                        self.heimdall.reply(self.get_user_stats(message.data.sender.name, False))
+                        self.heimdall.reply(self.get_user_stats(comm[1][1:], options))
+                    elif len(comm) == 1 or comm[1].startswith('--'):
+                        self.heimdall.reply(self.get_user_stats(message.data.sender.name, options))
                     else:
-                        self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (--aliases) or !stats @user (--aliases)")
+                        self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
 
                 elif comm[0] == "!roomstats":
                     if len(comm) > 1:
