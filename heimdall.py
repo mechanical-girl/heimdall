@@ -563,11 +563,11 @@ class Heimdall:
             earliest = self.c.fetchone()
 
             # Query gets the most recent message sent
-            self.c.execute('''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time DESC''', (self.use_logs, *aliases,))
+            self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time DESC''', (self.use_logs, *aliases,))
             latest = self.c.fetchone()
 
             days = {}
-            self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, *aliases,))
+            self.c.execute(f'''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, *aliases,))
             daily_messages = self.c.fetchall()
             days = {}
             dates = [datetime.utcfromtimestamp(int(x)).strftime("%Y-%m-%d") for x in range(int(earliest[6]), int(time.time()), 60 * 60 * 24)]
