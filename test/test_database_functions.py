@@ -25,7 +25,7 @@ class TestDatabaseFunctions(unittest.TestCase):
         c.execute('select * from messages')
         assert list(map(lambda x: x[0], c.description)) == ['content', 'id', 'parent', 'senderid', 'sendername', 'normname', 'time', 'room', 'globalid']
         c.execute('select * from aliases')
-        assert list(map(lambda x: x[0], c.description)) == ['master', 'alias']
+        list(map(lambda x: x[0], c.description)) == ['master', 'alias', 'normalias']
 
     def test_func_write_to_database_unspecified_mode_no_queue(self):
         self.heimdall.connect_to_database()
