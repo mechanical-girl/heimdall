@@ -263,7 +263,7 @@ class Heimdall:
                             globalid text
                         )''')
         self.write_to_database('''CREATE UNIQUE INDEX IF NOT EXISTS globalid ON messages(globalid)''')
-        self.write_to_database('''CREATE TABLE IF NOT EXISTS aliases(master text, alias text, normname text)''')
+        self.write_to_database('''CREATE TABLE IF NOT EXISTS aliases(master text, alias text, normalias text)''')
         self.write_to_database('''CREATE UNIQUE INDEX IF NOT EXISTS master ON aliases(alias)''')
 
     def get_room_logs(self):
@@ -762,6 +762,9 @@ TLT %:\t{tlts}
 
         return (message)
 
+    def parse_options(self, options_list):
+        return options
+
     def parse(self, message):
         if message.type == 'send-event' or message.type == 'send-reply':
             self.insert_message(message)
@@ -786,6 +789,7 @@ TLT %:\t{tlts}
 
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 if comm[0] == "!stats":
+                    options = self.parse_options(comm[1:])
                     if len(comm) > 1 and comm[1][0] == "@":
                         use_aliases = True if len(comm) == 3 and comm[2] == '--aliases' else False
                         self.heimdall.reply(self.get_user_stats(comm[1][1:], use_aliases))
