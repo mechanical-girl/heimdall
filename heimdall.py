@@ -555,7 +555,7 @@ class Heimdall:
             return ('User @{} not found.'.format(user.replace(' ', '')))
 
         if options == ['aliases']:
-            return "No options specified. Please only use --aliases in conjunction with --messages, --engagement, --tlts, or a combination thereof."
+            return "No options specified. Please only use --aliases in conjunction with --messages, --engagement, --text, or a combination thereof."
 
         if 'messages' in options:
             # Query gets the earliest message sent
