@@ -669,7 +669,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         # Collate and send the lot.
         return (f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
 
-    def get_room_stats(self_replies):
+    def get_room_stats(self):
         """Gets and sends stats for rooms"""
 
         self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
