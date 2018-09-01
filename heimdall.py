@@ -770,6 +770,20 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         return (message)
 
     def parse_options(self, options_list):
+        """
+        Parses options for running stats from the passed list
+
+        >>> h = Heimdall('test')
+        >>> h.parse_options(['--aliases','--messages','--engagement','--text'])
+        ['aliases', 'messages', 'engagement', 'text']
+        >>> h.parse_options(['--messages','--engagement','--text', '--aliases'])
+        ['aliases', 'messages', 'engagement', 'text']
+        >>> h.parse_options(['--text'])
+        ['text']
+        >>> h.parse_options(['--aliases','--messages','--engagement','--test'])
+        ['aliases', 'messages', 'engagement']
+
+        """
         options = []
         for arg in options_list:
             if arg in ['-a', '--aliases']:
