@@ -676,7 +676,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         count = self.c.fetchone()[0]
 
         # Calculate top ten posters of all time
-        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room="xkcd" GROUP BY name ORDER BY amount DESC LIMIT 10;''', (self.use_logs, ))
+        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC LIMIT 10;''', (self.use_logs, ))
         results = self.c.fetchall()
         top_ten = ""
         for i, result in enumerate(results):
