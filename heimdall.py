@@ -555,7 +555,7 @@ class Heimdall:
             return ('User @{} not found.'.format(user.replace(' ', '')))
 
         if options == ['aliases']:
-            return "No options specified. Please only use --aliases in conjunction with --messages, --engagement, --text, or a combination thereof."
+            return "No options specified. Please only use --aliases or -a in conjunction with --messages (or -m), --engagement (-e), --text (-t), or a combination thereof."
 
         if 'messages' in options:
             # Query gets the earliest message sent
@@ -782,7 +782,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         ['text']
         >>> h.parse_options(['--aliases','--messages','--engagement','--test'])
         ['aliases', 'messages', 'engagement']
-
         """
         options = []
         for arg in options_list:
@@ -828,7 +827,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
                     if len(comm) > 1 and comm[1][0] == "@":
                         self.heimdall.reply(self.get_user_stats(comm[1][1:], options))
-                    elif len(comm) == 1 or comm[1].startswith('--'):
+                    elif len(comm) == 1 or comm[1].startswith('-'):
                         self.heimdall.reply(self.get_user_stats(message.data.sender.name, options))
                     else:
                         self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
