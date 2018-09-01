@@ -695,14 +695,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         per_day_last_four_weeks = int(sum([count[1] for count in last_28_days]) / 28)
         last_28_days.sort(key=operator.itemgetter(1))
 
-        busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
-        last_28_days.sort(key=operator.itemgetter(0))
-
-        midnight = calendar.timegm(datetime.utcnow().date().timetuple())
-        messages_today = 0
-        if midnight in [tup[0] for tup in last_28_days]:
-            messages_today = dict(last_28_days)[midnight]
-
         self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (self.use_logs, ))
         messages_by_day = self.c.fetchall()
 
@@ -725,6 +717,18 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             all_time_graph = self.graph_data(data_x, data_y, title)
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
+
+        if last_28_days == None:
+            return f"There have been {count} posts in &{self.use_logs}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}"
+        else:
+            busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+            last_28_days.sort(key=operator.itemgetter(0))
+
+            midnight = calendar.timegm(datetime.utcnow().date().timetuple())
+            messages_today = 0
+            if midnight in [tup[0] for tup in last_28_days]:
+                messages_today = dict(last_28_days)[midnight]
+
 
         return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
 
@@ -777,7 +781,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         >>> h.parse_options(['--aliases','--messages','--engagement','--text'])
         ['aliases', 'messages', 'engagement', 'text']
         >>> h.parse_options(['--messages','--engagement','--text', '--aliases'])
-        ['aliases', 'messages', 'engagement', 'text']
+        ['messages', 'engagement', 'text', 'aliases']
         >>> h.parse_options(['--text'])
         ['text']
         >>> h.parse_options(['--aliases','--messages','--engagement','--test'])
