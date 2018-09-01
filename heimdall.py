@@ -810,7 +810,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                     options = self.parse_options(comm[1:])
 
                     if len(options) == 0:
-                        options = ['messages', 'engagement', 'reply']
+                        options = ['messages', 'engagement', 'text']
 
                     if len(comm) > 1 and comm[1][0] == "@":
                         self.heimdall.reply(self.get_user_stats(comm[1][1:], options))
