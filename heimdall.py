@@ -443,17 +443,17 @@ class Heimdall:
 
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
-        self.c.execute(
-            '''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''',
-            (self.use_logs, ))
         normnick = self.heimdall.normalise_nick(nick)
+        self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick,))
+        master_nick = self.c.fetchall()[0][0]
+        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
         position = 0
         while True:
             position += 1
-            result = self.c.fetchone()
+            result = self.c.fetchone()[1]
             if result is None:
                 return "unknown"
-            if result[0] == normnick:
+            if result == master_nick:
                 return position
 
     def get_user_at_position(self, position):
