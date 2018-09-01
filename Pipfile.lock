@@ -110,11 +110,11 @@
         },
         "karelia": {
             "hashes": [
-                "sha256:4b3113e8261a4ec7d79c9f3cd3fff920848632009a20bc1dbcd749fb8544cafa",
-                "sha256:cf45bfa7d9e66e9090fe3eb92fd57d2ac424be6046a208d6ea6056c1517f93e3"
+                "sha256:5a8884e17b71609f43aa752f4cc889d2154e8611c4bf609e1a4aacc51635542c",
+                "sha256:a0488c8c94cef0f56533119aaa34eeaf85a953c43197d808fffc7afdfadfc043"
             ],
             "index": "pypi",
-            "version": "==2.0.14"
+            "version": "==2.0.18"
         },
         "kiwisolver": {
             "hashes": [
@@ -147,7 +147,7 @@
                 "sha256:efabbcd4f406b532206b8801058c8bab9e79645b9880329253ae3322b7b02cd5",
                 "sha256:f923406e6b32c86309261b8195e24e18b6a8801df0cfc7814ac44017bfcb3939"
             ],
-            "markers": "python_version != '3.2.*' and python_version != '3.1.*' and python_version != '3.3.*' and python_version != '3.0.*' and python_version >= '2.7'",
+            "markers": "python_version != '3.2.*' and python_version >= '2.7' and python_version != '3.0.*' and python_version != '3.1.*' and python_version != '3.3.*'",
             "version": "==1.0.1"
         },
         "linecache2": {
@@ -167,6 +167,7 @@
                 "sha256:2316dc177fc7b3d8848b49365498de0c385b4c9bba511edddd24c34fbe3d37a4",
                 "sha256:3398bfb533482bf21974cecf28224dd23784ad4e4848be582903f7a2436ec12e",
                 "sha256:3477cb1e1061b34210acc43d20050be8444478ff50b8adfac5fe2b45fc97df01",
+                "sha256:3cc06333b8264428d02231804e2e726b902e9161dc16f573183dee6cb7ef621f",
                 "sha256:4259ea7cb2c238355ee13275eddd261d869cefbdeb18a65f35459589d6d17def",
                 "sha256:4addcf93234b6122f530f90f485fd3d00d158911fbc1ed24db3fa66cd49fe565",
                 "sha256:50c0e24bcbce9c54346f4a2f4e97b0ed111f0413ac3fe9954061ae1c8aa7021f",
@@ -326,7 +327,7 @@
                 "sha256:a68ac5e15e76e7e5dd2b8f94007233e01effe3e50e8daddf69acfd81cb686baf",
                 "sha256:b5725a0bd4ba422ab0e66e89e030c806576753ea3ee08554382c14e685d117b5"
             ],
-            "markers": "python_version != '3.2.*' and python_version != '3.1.*' and python_version < '4' and python_version != '3.3.*' and python_version != '3.0.*' and python_version >= '2.6'",
+            "markers": "python_version != '3.2.*' and python_version >= '2.6' and python_version < '4' and python_version != '3.0.*' and python_version != '3.1.*' and python_version != '3.3.*'",
             "version": "==1.23"
         },
         "websocket-client": {

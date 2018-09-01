@@ -555,7 +555,7 @@ class Heimdall:
             return ('User @{} not found.'.format(user.replace(' ', '')))
 
         if options == ['aliases']:
-            return "No options specified. Please only use --aliases in conjunction with --messages, --engagement, --tlts, or a combination thereof."
+            return "No options specified. Please only use --aliases or -a in conjunction with --messages (or -m), --engagement (-e), --text (-t), or a combination thereof."
 
         if 'messages' in options:
             # Query gets the earliest message sent
@@ -678,7 +678,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         # Calculate top ten posters of all time
         self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC LIMIT 10;''', (self.use_logs, ))
         results = self.c.fetchall()
-        print(results)
         top_ten = ""
         for i, result in enumerate(results):
             top_ten += "{:2d}) {:<7}\t{}\n".format(i + 1, int(result[0]), result[1])
@@ -695,14 +694,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
         per_day_last_four_weeks = int(sum([count[1] for count in last_28_days]) / 28)
         last_28_days.sort(key=operator.itemgetter(1))
-
-        busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
-        last_28_days.sort(key=operator.itemgetter(0))
-
-        midnight = calendar.timegm(datetime.utcnow().date().timetuple())
-        messages_today = 0
-        if midnight in [tup[0] for tup in last_28_days]:
-            messages_today = dict(last_28_days)[midnight]
 
         self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (self.use_logs, ))
         messages_by_day = self.c.fetchall()
@@ -726,6 +717,18 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             all_time_graph = self.graph_data(data_x, data_y, title)
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
+
+        if last_28_days == None:
+            return f"There have been {count} posts in &{self.use_logs}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}"
+        else:
+            busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+            last_28_days.sort(key=operator.itemgetter(0))
+
+            midnight = calendar.timegm(datetime.utcnow().date().timetuple())
+            messages_today = 0
+            if midnight in [tup[0] for tup in last_28_days]:
+                messages_today = dict(last_28_days)[midnight]
+
 
         return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
 
@@ -771,6 +774,19 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         return (message)
 
     def parse_options(self, options_list):
+        """
+        Parses options for running stats from the passed list
+
+        >>> h = Heimdall('test')
+        >>> h.parse_options(['--aliases','--messages','--engagement','--text'])
+        ['aliases', 'messages', 'engagement', 'text']
+        >>> h.parse_options(['--messages','--engagement','--text', '--aliases'])
+        ['messages', 'engagement', 'text', 'aliases']
+        >>> h.parse_options(['--text'])
+        ['text']
+        >>> h.parse_options(['--aliases','--messages','--engagement','--test'])
+        ['aliases', 'messages', 'engagement']
+        """
         options = []
         for arg in options_list:
             if arg in ['-a', '--aliases']:
@@ -815,7 +831,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
                     if len(comm) > 1 and comm[1][0] == "@":
                         self.heimdall.reply(self.get_user_stats(comm[1][1:], options))
-                    elif len(comm) == 1 or comm[1].startswith('--'):
+                    elif len(comm) == 1 or comm[1].startswith('-'):
                         self.heimdall.reply(self.get_user_stats(message.data.sender.name, options))
                     else:
                         self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
