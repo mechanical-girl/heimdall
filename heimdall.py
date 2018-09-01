@@ -445,16 +445,15 @@ class Heimdall:
         """Returns the rank the supplied nick has by number of messages"""
         normnick = self.heimdall.normalise_nick(nick)
         self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick,))
-        master_nick = self.c.fetchall()[0]
-        self.c.execute('''SELECT * FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (self.use_logs, ))
+        master_nick = self.c.fetchall()[0][0]
+        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
         position = 0
         while True:
             position += 1
-            result = self.c.fetchone()
-            print(result)
+            result = self.c.fetchone()[1]
             if result is None:
                 return "unknown"
-            if result[0] == master_nick:
+            if result == master_nick:
                 return position
 
     def get_user_at_position(self, position):
