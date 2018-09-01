@@ -669,14 +669,14 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         # Collate and send the lot.
         return (f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
 
-    def get_room_stats(self):
+    def get_room_stats(self_replies):
         """Gets and sends stats for rooms"""
 
         self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
         count = self.c.fetchone()[0]
 
         # Calculate top ten posters of all time
-        self.c.execute('''SELECT sendername,normname,COUNT(normname) AS freq FROM messages WHERE room IS ? GROUP BY normname ORDER BY freq DESC LIMIT 10''', (self.use_logs, ))
+        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room="xkcd" GROUP BY name ORDER BY amount DESC LIMIT 10;''', (self.use_logs, ))
         results = self.c.fetchall()
         top_ten = ""
         for i, result in enumerate(results):
