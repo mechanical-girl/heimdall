@@ -22,6 +22,8 @@ import sqlite3
 import string
 import sys
 import time
+import matplotlib
+matplotlib.use('TkAgg')
 import urllib.request
 from datetime import date, datetime
 from datetime import time as dttime
@@ -444,16 +446,20 @@ class Heimdall:
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
         normnick = self.heimdall.normalise_nick(nick)
-        self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick,))
-        master_nick = self.c.fetchall()[0][0]
-        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
+        try:
+            self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick,))
+            master_nick = self.c.fetchall()[0][0]
+            self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
+        except IndexError:
+            master_nick = normnick
+            self.c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.use_logs, ))
         position = 0
         while True:
             position += 1
-            result = self.c.fetchone()[1]
+            result = self.c.fetchone()
             if result is None:
                 return "unknown"
-            if result == master_nick:
+            if result[1] == master_nick:
                 return position
 
     def get_user_at_position(self, position):
@@ -599,8 +605,7 @@ class Heimdall:
             if first_message_sent == self.date_from_timestamp(time.time()):
                 first_message_sent = "Today"
             else:
-                "{} days ago, on {}".format(first_message_sent,
-                                            days_since_first_message)
+                "{} days ago, on {}".format(first_message_sent, days_since_first_message)
 
             if last_message_sent == self.date_from_timestamp(time.time()):
                 last_message_sent = "Today"
@@ -613,25 +618,29 @@ class Heimdall:
 
             last_28_days = days[-28:]
 
-            title = "Messages by {}, last 28 days".format(user)
-            data_x = [day[0] for day in last_28_days]
-            data_y = [day[1] for day in last_28_days]
-            if self.testing:
-                last_28_url = "url_goes_here"
-            else:
-                last_28_graph = self.graph_data(data_x, data_y, title)
-                last_28_file = self.save_graph(last_28_graph)
-                last_28_url = self.upload_and_delete_graph(last_28_file)
+            try:
+                title = "Messages by {}, last 28 days".format(user)
+                data_x = [day[0] for day in last_28_days]
+                data_y = [day[1] for day in last_28_days]
+                if self.testing:
+                    last_28_url = "url_goes_here"
+                else:
+                    last_28_graph = self.graph_data(data_x, data_y, title)
+                    last_28_file = self.save_graph(last_28_graph)
+                    last_28_url = self.upload_and_delete_graph(last_28_file)
 
-            title = "Messages by {}, all time".format(user)
-            data_x = [day[0] for day in days]
-            data_y = [day[1] for day in days]
-            if self.testing:
-                all_time_url = "url_goes_here"
-            else:
-                all_time_graph = self.graph_data(data_x, data_y, title)
-                all_time_file = self.save_graph(all_time_graph)
-                all_time_url = self.upload_and_delete_graph(all_time_file)
+                title = "Messages by {}, all time".format(user)
+                data_x = [day[0] for day in days]
+                data_y = [day[1] for day in days]
+                if self.testing:
+                    all_time_url = "url_goes_here"
+                else:
+                    all_time_graph = self.graph_data(data_x, data_y, title)
+                    all_time_file = self.save_graph(all_time_graph)
+                    all_time_url = self.upload_and_delete_graph(all_time_file)
+                
+            except ZeroDivisionError:
+                last_28_url = ""
 
             # Get requester's position.
             position = self.get_position(normnick)
@@ -649,7 +658,9 @@ Most Recent Message:\t{last_message_sent}
 Average Messages/Day:\t{int(count/number_of_days)}
 Busiest Day:\t\t\t\t{busiest_day[0]}, with {busiest_day[1]} messages
 Ranking:\t\t\t\t\t{position} of {no_of_posters}.
-{all_time_url} {last_28_url}\n\n"""
+{all_time_url} {last_28_url}
+
+"""
 
         else:
             message_results = ""
