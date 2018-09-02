@@ -22,6 +22,8 @@ import sqlite3
 import string
 import sys
 import time
+import matplotlib
+matplotlib.use('TkAgg')
 import urllib.request
 from datetime import date, datetime
 from datetime import time as dttime
@@ -444,16 +446,20 @@ class Heimdall:
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
         normnick = self.heimdall.normalise_nick(nick)
-        self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick,))
-        master_nick = self.c.fetchall()[0][0]
-        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
+        try:
+            self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick,))
+            master_nick = self.c.fetchall()[0][0]
+            self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
+        except IndexError:
+            master_nick = normnick
+            self.c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.use_logs, ))
         position = 0
         while True:
             position += 1
-            result = self.c.fetchone()[1]
+            result = self.c.fetchone()
             if result is None:
                 return "unknown"
-            if result == master_nick:
+            if result[1] == master_nick:
                 return position
 
     def get_user_at_position(self, position):
@@ -583,6 +589,7 @@ class Heimdall:
                 messages_today = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
             except KeyError:
                 messages_today = 0
+            
             days_by_busyness = [(k, days[k]) for k in sorted(days, key=days.get, reverse=True)]
             busiest_day = days_by_busyness[0]
 
@@ -599,15 +606,17 @@ class Heimdall:
             if first_message_sent == self.date_from_timestamp(time.time()):
                 first_message_sent = "Today"
             else:
-                "{} days ago, on {}".format(first_message_sent,
-                                            days_since_first_message)
+                "{} days ago, on {}".format(first_message_sent, days_since_first_message)
 
             if last_message_sent == self.date_from_timestamp(time.time()):
                 last_message_sent = "Today"
             else:
-                "{} days ago, on {}".format(last_message_sent, days_since_last_message)
+                last_message_sent = "{} days ago, on {}".format(last_message_sent, days_since_last_message)
 
-                number_of_days = number_of_days if number_of_days > 0 else 1
+            try:
+                avg_messages_per_day = int(count/number_of_days)
+            except ZeroDivisionError:
+                avg_messages_per_day = 0
 
             days = sorted(days.items())
 
@@ -633,6 +642,7 @@ class Heimdall:
                 all_time_file = self.save_graph(all_time_graph)
                 all_time_url = self.upload_and_delete_graph(all_time_file)
 
+
             # Get requester's position.
             position = self.get_position(normnick)
             self.c.execute(
@@ -646,10 +656,12 @@ Messages Sent Today:\t\t{messages_today}
 First Message Date:\t\t{first_message_sent}
 First Message:\t\t\t{earliest[0]}
 Most Recent Message:\t{last_message_sent}
-Average Messages/Day:\t{int(count/number_of_days)}
+Average Messages/Day:\t{avg_messages_per_day}
 Busiest Day:\t\t\t\t{busiest_day[0]}, with {busiest_day[1]} messages
 Ranking:\t\t\t\t\t{position} of {no_of_posters}.
-{all_time_url} {last_28_url}\n\n"""
+{all_time_url} {last_28_url}
+
+"""
 
         else:
             message_results = ""
