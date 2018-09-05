@@ -37,10 +37,6 @@ import pyimgur
 from aylienapiclient import textapi
 from urlextract import URLExtract
 
-matplotlib.use('TkAgg')
-
-
-
 
 class UpdateDone(Exception):
     """Exception meaning that logs are up to date"""
