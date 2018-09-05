@@ -22,8 +22,6 @@ import sqlite3
 import string
 import sys
 import time
-import matplotlib
-matplotlib.use('TkAgg')
 import urllib.request
 from datetime import date, datetime
 from datetime import time as dttime
@@ -32,6 +30,7 @@ from typing import Dict, List, Tuple, Union
 from urllib.parse import urlparse
 
 import karelia
+import matplotlib
 import matplotlib.pyplot as plt
 
 import pyimgur
@@ -445,26 +444,31 @@ class Heimdall:
 
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
-        normnick = self.heimdall.normalise_nick(nick)
-        try:
-            self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick,))
-            master_nick = self.c.fetchall()[0][0]
-            self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
-        except IndexError:
-            master_nick = normnick
-            self.c.execute('''SELECT normname, count FROM (SELECT normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.use_logs, ))
+        master_nick = self.get_master_nick_of_user(nick)
         position = 0
+        pairs = self.get_count_user_pairs()
+        pair = next(pairs)
         while True:
             position += 1
-            result = self.c.fetchone()
-            if result is None:
-                return "unknown"
-            if result[1] == master_nick:
+            if pair[1] == master_nick:
                 return position
+            elif pair is None:
+                return None
+            pair = next(pairs)
+
+    def get_master_nick_of_user(self, user):
+        """For a given user, returns their 'master nick' if aliases are known for them, else their username"""
+        normnick = self.heimdall.normalise_nick(user)
+        self.c.execute('''SELECT master FROM aliases WHERE normalias = ?''', (normnick,))
+        try:
+            master_nick = self.c.fetchall()[0][0]
+            return master_nick
+        except IndexError:
+            return user
+
 
     def get_user_at_position(self, position):
         """Returns the user at the specified position"""
-        self.c.execute('''SELECT sendername FROM (SELECT sendername, normname, COUNT(*) as count FROM messages WHERE room IS ? GROUP BY normname) ORDER BY count DESC''', (self.use_logs, ))
 
         # Check to see they've passed a number
         try:
@@ -474,11 +478,9 @@ class Heimdall:
             return "The position you specified was invalid."
 
         # In case they pass a number larger than the number of users
-        try:
-            for i in range(position):
-                name = self.c.fetchone()[0]
-        except:
-            return "You requested a position which doesn't exist. There have been {} uniquely-named posters in &{}.".format(i, self.use_logs)
+        pairs = self.get_count_user_pairs()
+        for i in range(position):
+            name = next(pairs)[1]
 
         return "The user at position {} is {}".format(position, name)
 
@@ -688,11 +690,14 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         count = self.c.fetchone()[0]
 
         # Calculate top ten posters of all time
-        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC LIMIT 10;''', (self.use_logs, ))
-        results = self.c.fetchall()
         top_ten = ""
-        for i, result in enumerate(results):
-            top_ten += "{:2d}) {:<7}\t{}\n".format(i + 1, int(result[0]), result[1])
+        posters = self.get_count_user_pairs()
+        i = 0
+        for pair in posters:
+            i += 1
+            top_ten += "{:2d}) {:<7}\t{}\n".format(i, int(pair[0]), pair[1])
+            if i == 10:
+                break
 
             # Get activity over the last 28 days
         lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
@@ -765,6 +770,14 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
         self.c.execute(f'''SELECT count(*) FROM messages WHERE normname IS ? AND parent IN (SELECT id FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}))''', (self.heimdall.normalise_nick(user), self.use_logs, *aliases,))
         self_replies = self.c.fetchall()[0][0]
+
+    def get_count_user_pairs(self):
+        """Iterator which yields (posts, user) tuple"""
+        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
+        while True:
+            result = self.c.fetchone()
+            yield result
+
 
         def formatta(tup, total):
             return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
