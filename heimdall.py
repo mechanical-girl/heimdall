@@ -30,11 +30,16 @@ from typing import Dict, List, Tuple, Union
 from urllib.parse import urlparse
 
 import karelia
+import matplotlib
 import matplotlib.pyplot as plt
 
 import pyimgur
 from aylienapiclient import textapi
 from urlextract import URLExtract
+
+matplotlib.use('TkAgg')
+
+
 
 
 class UpdateDone(Exception):
@@ -590,6 +595,7 @@ class Heimdall:
                 messages_today = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
             except KeyError:
                 messages_today = 0
+            
             days_by_busyness = [(k, days[k]) for k in sorted(days, key=days.get, reverse=True)]
             busiest_day = days_by_busyness[0]
 
@@ -606,15 +612,17 @@ class Heimdall:
             if first_message_sent == self.date_from_timestamp(time.time()):
                 first_message_sent = "Today"
             else:
-                "{} days ago, on {}".format(first_message_sent,
-                                            days_since_first_message)
+                "{} days ago, on {}".format(first_message_sent, days_since_first_message)
 
             if last_message_sent == self.date_from_timestamp(time.time()):
                 last_message_sent = "Today"
             else:
-                "{} days ago, on {}".format(last_message_sent, days_since_last_message)
+                last_message_sent = "{} days ago, on {}".format(last_message_sent, days_since_last_message)
 
-                number_of_days = number_of_days if number_of_days > 0 else 1
+            try:
+                avg_messages_per_day = int(count/number_of_days)
+            except ZeroDivisionError:
+                avg_messages_per_day = 0
 
             days = sorted(days.items())
 
@@ -640,6 +648,7 @@ class Heimdall:
                 all_time_file = self.save_graph(all_time_graph)
                 all_time_url = self.upload_and_delete_graph(all_time_file)
 
+
             # Get requester's position.
             position = self.get_position(normnick)
             self.c.execute(
@@ -653,10 +662,12 @@ Messages Sent Today:\t\t{messages_today}
 First Message Date:\t\t{first_message_sent}
 First Message:\t\t\t{earliest[0]}
 Most Recent Message:\t{last_message_sent}
-Average Messages/Day:\t{int(count/number_of_days)}
+Average Messages/Day:\t{avg_messages_per_day}
 Busiest Day:\t\t\t\t{busiest_day[0]}, with {busiest_day[1]} messages
 Ranking:\t\t\t\t\t{position} of {no_of_posters}.
-{all_time_url} {last_28_url}\n\n"""
+{all_time_url} {last_28_url}
+
+"""
 
         else:
             message_results = ""
