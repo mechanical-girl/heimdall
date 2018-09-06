@@ -928,9 +928,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                         except sqlite3.IntegrityError:
                             pass
 
-                elif comm[0] == "!engage":
-                    self.heimdall.send(self.get_user_engagement_table(comm[1][1:]), message.data.id)
-
     def main(self):
         """Main loop"""
 
