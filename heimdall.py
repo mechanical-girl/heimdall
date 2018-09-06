@@ -202,6 +202,7 @@ class Heimdall:
             self.heimdall.disconnect()
 
     def write_to_database(self, statement, **kwargs):
+        """Optionally, pass values=values, mode=mode."""
         values = kwargs['values'] if 'values' in kwargs else ()
         mode = kwargs['mode'] if 'mode' in kwargs else "execute"
 
@@ -754,6 +755,13 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         return (f"Position {self.get_position(user)}")
 
     def get_user_engagement_table(self, user):
+        """(self, user) -> table"""
+
+        # Yes, this function is defined inside another function. That's the way I want it. Don't unindent it.
+        def formatta(tup, total):
+            return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
+
+
         normnick = self.heimdall.normalise_nick(user)
 
         aliases = [self.heimdall.normalise_nick(nick) for nick in self.get_aliases(user)]
@@ -771,22 +779,20 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         self.c.execute(f'''SELECT count(*) FROM messages WHERE normname IS ? AND parent IN (SELECT id FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}))''', (self.heimdall.normalise_nick(user), self.use_logs, *aliases,))
         self_replies = self.c.fetchall()[0][0]
 
+        table = ""
+
+        for pair in parents_replied_to:
+            table += formatta(pair, total_count)
+        table += f"\nSelf-reply rate: {round(self_replies*100/total_count, 2)}"
+
+        return f"{table}"
+
     def get_count_user_pairs(self):
         """Iterator which yields (posts, user) tuple"""
         self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
         while True:
             result = self.c.fetchone()
             yield result
-
-
-        def formatta(tup, total):
-            return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
-        table = ""
-        for pair in parents_replied_to:
-            table += formatta(pair, total_count)
-        table += f"\nSelf-reply rate: {round(self_replies*100/total_count, 2)}"
-
-        return f"{table}"
 
     def get_message(self):
         """Gets messages from heim"""
@@ -928,8 +934,21 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                         except sqlite3.IntegrityError:
                             pass
 
-                elif comm[0] == "!engage":
-                    self.heimdall.send(self.get_user_engagement_table(comm[1][1:]), message.data.id)
+                elif comm[0] == "!master":
+                    if len(comm) == 3 and comm[1].startswith('@') and comm[2].startswith('@'):
+                        user = comm[1][1:]
+                        old_master = self.get_master_nick_of_user(user)
+                        new_master = comm[2][1:]
+                        aliases = self.get_aliases(old_master)
+                        if new_master in aliases:
+                            self.c.execute('DELETE FROM aliases WHERE master=?', (old_master,))
+                            new_aliases = [(new_master, nick, self.heimdall.normalise_nick(nick),) for nick in aliases]
+                            self.write_to_database('''INSERT INTO aliases VALUES(?, ?, ?)''', values=new_aliases, mode='executemany')
+                            self.heimdall.reply('Remastered @th\'s aliases to @totallyhuman')
+                        else:
+                            self.heimdall.reply("New master not found in user's aliases")
+                    else:
+                        self.heimdall.reply("Syntax is !master @alias @newmaster")
 
     def main(self):
         """Main loop"""
