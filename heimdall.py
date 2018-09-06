@@ -202,6 +202,7 @@ class Heimdall:
             self.heimdall.disconnect()
 
     def write_to_database(self, statement, **kwargs):
+        """Optionally, pass values=values, mode=mode."""
         values = kwargs['values'] if 'values' in kwargs else ()
         mode = kwargs['mode'] if 'mode' in kwargs else "execute"
 
@@ -927,6 +928,22 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                             self.write_to_database('''INSERT INTO aliases VALUES(?, ?, ?)''', values=(master_nick, nick, normnick))
                         except sqlite3.IntegrityError:
                             pass
+
+                elif comm[0] == "!master":
+                    if len(comm) == 3 and comm[1].startswith('@') and comm[2].startswith('@'):
+                        user = comm[1][1:]
+                        old_master = self.get_master_nick_of_user(user)
+                        new_master = comm[2][1:]
+                        aliases = self.get_aliases(old_master)
+                        if new_master in aliases:
+                            self.c.execute('DELETE FROM aliases WHERE master=?', (old_master,))
+                            new_aliases = [(new_master, nick, self.heimdall.normalise_nick(nick),) for nick in aliases]
+                            self.write_to_database('''INSERT INTO aliases VALUES(?, ?, ?)''', values=new_aliases, mode='executemany')
+                            self.heimdall.reply('Remastered @th\'s aliases to @totallyhuman')
+                        else:
+                            self.heimdall.reply("New master not found in user's aliases")
+                    else:
+                        self.heimdall.reply("Syntax is !master @alias @newmaster")
 
     def main(self):
         """Main loop"""
