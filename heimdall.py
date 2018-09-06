@@ -755,6 +755,13 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         return (f"Position {self.get_position(user)}")
 
     def get_user_engagement_table(self, user):
+        """(self, user) -> table"""
+
+        # Yes, this function is defined inside another function. That's the way I want it. Don't unindent it.
+        def formatta(tup, total):
+            return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
+
+
         normnick = self.heimdall.normalise_nick(user)
 
         aliases = [self.heimdall.normalise_nick(nick) for nick in self.get_aliases(user)]
@@ -772,22 +779,20 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         self.c.execute(f'''SELECT count(*) FROM messages WHERE normname IS ? AND parent IN (SELECT id FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}))''', (self.heimdall.normalise_nick(user), self.use_logs, *aliases,))
         self_replies = self.c.fetchall()[0][0]
 
+        table = ""
+
+        for pair in parents_replied_to:
+            table += formatta(pair, total_count)
+        table += f"\nSelf-reply rate: {round(self_replies*100/total_count, 2)}"
+
+        return f"{table}"
+
     def get_count_user_pairs(self):
         """Iterator which yields (posts, user) tuple"""
         self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
         while True:
             result = self.c.fetchone()
             yield result
-
-
-        def formatta(tup, total):
-            return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
-        table = ""
-        for pair in parents_replied_to:
-            table += formatta(pair, total_count)
-        table += f"\nSelf-reply rate: {round(self_replies*100/total_count, 2)}"
-
-        return f"{table}"
 
     def get_message(self):
         """Gets messages from heim"""
