@@ -832,7 +832,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             if self.total_messages_all_time % 25000 == 0:
                 self.heimdall.reply("Congratulations on making the {}th post in &{}!".format(self.total_messages_all_time, self.room))
 
-            if message.type == 'send-reply':
+            if message.type == 'send-reply' or len(message.data.content.split()) == 0:
                 return
 
             if message.data.content.split()[0] != "!ignore":
