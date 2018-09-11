@@ -592,7 +592,7 @@ class Heimdall:
                 messages_today = days[datetime.utcfromtimestamp(datetime.today().timestamp()).strftime("%Y-%m-%d")]
             except KeyError:
                 messages_today = 0
-            
+
             days_by_busyness = [(k, days[k]) for k in sorted(days, key=days.get, reverse=True)]
             busiest_day = days_by_busyness[0]
 
@@ -670,7 +670,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             message_results = ""
 
         if 'engagement' in options: 
-            engagement_results = f"User engagement:\n{self.get_user_engagement_table(user)}\n\n"
+            engagement_results = f"User engagement:\n{self.get_user_engagement_table(user)}\n"
         else:
             engagement_results = ""
 
@@ -678,6 +678,21 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             self.c.execute('''SELECT COUNT(*) from messages WHERE room IS ? AND normname IS ? AND parent IS ?''', (self.use_logs, normnick, '',))
             tlts = round((self.c.fetchall()[0][0] * 100) / count, 2)
             text_results = f"TLTs %:\t{tlts}\n\n"
+            self.c.execute(f'''SELECT content FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY random() LIMIT 1000''', (self.use_logs, *aliases,))
+            messages = [message[0] for message in self.c.fetchall()]
+
+            average_message_words = 0
+            average_message_characters = 0
+            sample_size = len(messages)
+ 
+            for message in messages:
+                average_message_words += len(message.split())
+                average_message_characters += len(message)
+            average_message_words /= sample_size
+            average_message_characters /= sample_size
+
+            text_results += f"Average words per message:\t\t{int(average_message_words)}\nAverage characters per message:\t{int(average_message_characters)}\n(Sample size of {sample_size})\n\n" 
+
         else:
             text_results = ""
 
@@ -958,6 +973,8 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             self.connect_to_database()
             while True:
                 self.parse(self.get_message())
+        except KeyboardInterrupt:
+            sys.exit(0)
         except KillError:
             self.heimdall.log()
             self.conn.commit()
@@ -989,6 +1006,8 @@ def main(room, **kwargs):
 
         try:
             heimdall.main()
+        except KeyboardInterrupt:
+            sys.exit(0)
         except KillError:
             raise
 
