@@ -7,14 +7,15 @@ accurate logs and statistics on request for the purposes of archiving and
 curiosity, it should be able to track the movements of spammers and other
 known-problematic individuals.
 """
-
 import argparse
 import calendar
 import codecs
 import html
 import json
+import multiprocessing as mp
 import operator
 import os
+import queue
 import random
 import re
 import signal
@@ -74,6 +75,7 @@ class Heimdall:
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
         self.testing = False
+        self.results = mp.Queue()
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
@@ -538,7 +540,7 @@ class Heimdall:
         else:
             return [alias[0] for alias in reply]
 
-    def get_user_stats(self, user, options):
+    def get_user_stats(self, user, options, results, message_id):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
         normnick = self.heimdall.normalise_nick(user)
@@ -602,7 +604,6 @@ class Heimdall:
 
             # number_of_days only takes the average of days between the first message and the most recent message
             number_of_days = (datetime.strptime(last_message_sent, "%Y-%m-%d") - datetime.strptime(first_message_sent, "%Y-%m-%d")).days
-
             days_since_first_message = (datetime.today() - datetime.strptime(first_message_sent, "%Y-%m-%d")).days
             days_since_last_message = (datetime.today() - datetime.strptime(last_message_sent, "%Y-%m-%d")).days
 
@@ -644,7 +645,6 @@ class Heimdall:
                 all_time_graph = self.graph_data(data_x, data_y, title)
                 all_time_file = self.save_graph(all_time_graph)
                 all_time_url = self.upload_and_delete_graph(all_time_file)
-
 
             # Get requester's position.
             position = self.get_position(normnick)
@@ -697,9 +697,9 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             text_results = ""
 
         # Collate and send the lot.
-        return (f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
+        results.put((f"""{message_results}{engagement_results}{text_results}{aliases_used}""", message_id,))
 
-    def get_room_stats(self):
+    def get_room_stats(self, results, message_id):
         """Gets and sends stats for rooms"""
 
         self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
@@ -763,7 +763,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                 messages_today = dict(last_28_days)[midnight]
 
 
-        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
+        results.put((f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}", message_id))
 
     def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
@@ -876,9 +876,9 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                         options = ['messages', 'engagement', 'text']
 
                     if len(comm) > 1 and comm[1][0] == "@":
-                        self.heimdall.reply(self.get_user_stats(comm[1][1:], options))
+                        mp.Process(target=self.get_user_stats, args=(comm[1][1:], options, self.results, message.data.id,)).start()
                     elif len(comm) == 1 or comm[1].startswith('-'):
-                        self.heimdall.reply(self.get_user_stats(message.data.sender.name, options))
+                        mp.Process(target=self.get_user_stats, args=(message.data.sender.name, options, self.results, message.data.id,)).start()
                     else:
                         self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
 
@@ -886,7 +886,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                     if len(comm) > 1:
                         self.heimdall.reply("Sorry, only stats for the current room are supported.")
                     else:
-                        self.heimdall.reply(self.get_room_stats())
+                        mp.Process(target=self.get_room_stats, args=(self.results, message.data.id)).start()
 
                 elif comm[0] == "!rank":
                     if len(comm) > 1 and comm[1][0] == "@":
@@ -964,6 +964,12 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                             self.heimdall.reply("New master not found in user's aliases")
                     else:
                         self.heimdall.reply("Syntax is !master @alias @newmaster")
+
+            try:
+                reply = self.results.get(False)
+                self.heimdall.send(reply[0], reply[1])
+            except queue.Empty:
+                pass
 
     def main(self):
         """Main loop"""
