@@ -11,7 +11,6 @@ known-problematic individuals.
 import argparse
 import calendar
 import codecs
-import html
 import json
 import operator
 import os
@@ -22,20 +21,16 @@ import sqlite3
 import string
 import sys
 import time
-import urllib.request
 from datetime import date, datetime
 from datetime import time as dttime
 from datetime import timedelta
 from typing import Dict, List, Tuple, Union
-from urllib.parse import urlparse
 
 import karelia
 import matplotlib
 import matplotlib.pyplot as plt
 
 import pyimgur
-from aylienapiclient import textapi
-from urlextract import URLExtract
 
 
 class UpdateDone(Exception):
@@ -117,15 +112,6 @@ class Heimdall:
                 self.heimdall.log()
                 self.show(f"Error creating help text - see 'Heimdall &{self.room}.log' for details.")
 
-        with open(self.files['regex'], 'r') as f:
-            self.show("Loading url regex...", end=' ')
-            try:
-                self.url_regex: str = f.read()
-                self.show("done")
-            except:
-                self.heimdall.log()
-                self.show(f"Error reading url regex - see 'Heimdall &{self.room}.log' for details.")
-
         with open(self.files['imgur'], 'r') as f:
             self.show("Reading imgur key, creating Imgur client...", end=' ')
             try:
@@ -134,44 +120,8 @@ class Heimdall:
                 self.show("done")
             except Exception:
                 self.heimdall.log()
-                self.show(
-                    f"Error reading imgur key - see 'Heimdall &{self.room}.log' for details."
-                )
+                self.show(f"Error reading imgur key - see 'Heimdall &{self.room}.log' for details.")
 
-        with open(self.files['block_list'], 'r+') as f:
-            try:
-                self.show("Loading blocklists...", end=' ')
-                block_domains: Dict[str, List[str]] = json.loads(f.read())
-                if self.room in block_domains:
-                    self.block_domains: List[str] = block_domains[self.room]
-                else:
-                    self.show("using master", end=' ')
-                    self.block_domains: List[str] = block_domains['master'][:]
-                self.show("done")
-            except:
-                self.heimdall.log()
-                self.show(f"Error reading block list - see 'Heimdall &{self.room}.log' for details.")
-
-        with open(self.files["aylien"], 'r') as f:
-            self.show("Loading aylien credentials...", end=' ')
-            try:
-                aylien_creds = json.loads(f.read())
-                self.summariser = textapi.Client(aylien_creds[0], aylien_creds[1])
-                self.show("done")
-            except:
-                self.heimdall.log()
-                self.show(f"Error reading aylien credentials - see 'Heimdall &{self.room}.log for details.")
-
-        with open(self.files["summ_list"], 'r') as f:
-            self.show("Loading summarise domains...", end=' ')
-            try:
-                self.summarise = json.loads(f.read())
-                self.show("done")
-            except:
-                self.heimdall.log()
-                self.show(f"Error reading summarise domain list - see 'Heimdall &{self.room}.log for details.")
-
-        self.extractor = URLExtract()
 
         self.connect_to_database()
         self.show("Connecting to database...", end=' ')
@@ -394,55 +344,6 @@ class Heimdall:
         """
         return (datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d"))
 
-    def get_urls(self, content):
-        """
-        Gets a list of the urls in content
-
-        Processes the content given, remove any in the known_urls list,
-        then return a list of the rest
-
-        >>> h = Heimdall('test')
-        >>> h.block_domains = []
-        >>> h.get_urls('imgur.com/vKIVbMz')
-        ['imgur.com/vKIVbMz']
-        >>> h.get_urls('imgur.com/vKIVbMz reddit.com https://focused.af')
-        ['imgur.com/vKIVbMz', 'reddit.com', 'https://focused.af']
-        >>> h.get_urls('So this.content doesn://t.contain/urls.php')
-        []
-        """
-
-        urls = self.extractor.find_urls(content)
-        known_urls = []
-        for url in urls:
-            for known_url in self.block_domains:
-                if known_url in url:
-                    known_urls.append(url)
-
-        return ([url for url in urls if url not in known_urls])
-
-    def get_page_titles(self, urls):
-        """
-        Gets page titles for the urls passed
-
-        >>> h = Heimdall('test')
-        >>> h.testing = True
-        >>> h.get_page_titles(['imgur.com/vKIVbMz', 'reddit.com', 'https://focused.af']) # doctest: +SKIP
-        'Title: Imgur: The magic of the Internetreddit: the front page of the internetFocused AF'
-        >>> h.get_page_titles(['imgur.com/vKIVbMz']) # doctest: +SKIP
-        'Title: Imgur: The magic of the Internet'
-        """
-
-        response = ""
-        for match in urls:
-            url = 'http://' + match if '://' not in match else match
-            title = str(urllib.request.urlopen(url).read()).split('<title>')[1].split('</title>')[0]
-            title = html.unescape(codecs.decode(title, 'unicode_escape')).strip()
-            clear_title = title if len(title) <= 75 else '{}...'.format(title[0:72].strip())
-            end = '' if self.testing else '\n'
-            response += f"Title: {clear_title}{end}"
-
-        return response
-
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
         master_nick = self.get_master_nick_of_user(nick)
@@ -466,7 +367,6 @@ class Heimdall:
             return master_nick
         except IndexError:
             return user
-
 
     def get_user_at_position(self, position):
         """Returns the user at the specified position"""
@@ -510,18 +410,6 @@ class Heimdall:
             url = "Imgur upload failed, sorry."
         os.remove(filename)
         return (url)
-
-    def look_for_room_links(self, content):
-        """
-        Looks for and saves all possible rooms in message
-
-
-        """
-        new_possible_rooms = set([room[1:] for room in content.split() if room[0] == '&'])
-        with open(self.files['possible_rooms'], 'r') as f: possible_rooms = set(json.loads(f.read()))
-        possible_rooms.union(new_possible_rooms)
-        with open(self.files['possible_rooms'], 'w') as f:
-            f.write(json.dumps(list(possible_rooms)))
 
     def get_aliases(self, user):
         normnick = self.heimdall.normalise_nick(user)
@@ -645,7 +533,6 @@ class Heimdall:
                 all_time_file = self.save_graph(all_time_graph)
                 all_time_url = self.upload_and_delete_graph(all_time_file)
 
-
             # Get requester's position.
             position = self.get_position(normnick)
             self.c.execute(
@@ -751,7 +638,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
 
-        if last_28_days == None:
+        if last_28_days is None:
             return f"There have been {count} posts in &{self.use_logs}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}"
         else:
             busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
@@ -761,7 +648,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             messages_today = 0
             if midnight in [tup[0] for tup in last_28_days]:
                 messages_today = dict(last_28_days)[midnight]
-
 
         return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
 
@@ -775,7 +661,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         # Yes, this function is defined inside another function. That's the way I want it. Don't unindent it.
         def formatta(tup, total):
             return f"{'{:4.2f}'.format(round(tup[1]*100/total, 2))}\t\t{tup[0]}\n"
-
 
         normnick = self.heimdall.normalise_nick(user)
 
@@ -856,16 +741,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             if message.type == 'send-reply' or len(message.data.content.split()) == 0:
                 return
 
-            if message.data.content.split()[0] != "!ignore":
-                self.look_for_room_links(message.data.content)
-                urls = self.get_urls(message.data.content)
-                summs = [url for url in urls if urlparse(url).netloc in self.summarise]
-                urls = [url for url in urls if url not in summs]
-                self.heimdall.reply(self.get_page_titles(urls))
-
-                for summ in summs:
-                    self.heimdall.reply("{}\n{}".format(self.get_page_titles([summ]), ' '.join(self.summariser.Summarize({"url": summ, "sentences_number": 2 })['sentences'])))
-
             comm = message.data.content.split()
 
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
@@ -899,17 +774,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                             self.heimdall.reply("Sorry, no name or number detected. Syntax is !rank (@user|<number>)")
                     else:
                         self.heimdall.reply(self.get_rank_of_user(message.data.sender.name))
-
-                elif comm[0] == "!summ" or comm[0] == "!summarise":
-                    if self.get_urls(comm[1]) == [comm[1]]:
-                        self.heimdall.reply(' '.join(self.summariser.Summarize({"url": comm[1], "sentences_number": 2 })['sentences']))
-                        summ_domain = urlparse(comm[1]).netloc
-                        if summ_domain not in self.summarise:
-                            with open(self.files["summ_list"], 'r') as f:
-                                self.summarise = json.loads(f.read())
-                            self.summarise.append(summ_domain)
-                            with open(self.files["summ_list"], 'w') as f:
-                                f.write(json.dumps(self.summarise))
 
                 elif comm[0] == "!alias":
                     while True:
