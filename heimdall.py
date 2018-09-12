@@ -865,6 +865,17 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
                 for summ in summs:
                     self.heimdall.reply("{}\n{}".format(self.get_page_titles([summ]), ' '.join(self.summariser.Summarize({"url": summ, "sentences_number": 2 })['sentences'])))
+            else:
+                urls = [urlparse(url).netloc for url in self.get_urls(message.data.content)]
+                self.block_domains += urls
+                with open(self.files['block_list'], 'r') as f:
+                    try:
+                        block_domains: Dict[str, List[str]] = json.loads(f.read())
+                        block_domains[self.room] = self.block_domains
+                    except Exception:
+                        self.heimdall.log()
+                with open(self.files['block_list'], 'w') as f:
+                    f.write(json.dumps(self.block_domains))
 
             comm = message.data.content.split()
 
