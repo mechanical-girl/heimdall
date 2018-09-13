@@ -96,6 +96,9 @@ class Heimdall:
                 with open(self.files[key], 'w') as f:
                     f.write('[]')
 
+            except json.decoder.JSONDecodeError:
+                self.show(f"Unable to read JSON from file {self.files[key]}. This suggests that the JSON in this file has been corrupted. The file will need to be manually edited before Heimdall can run successfully.")
+
         with open(self.files['help_text'], 'r') as f:
             self.show("Loading help text...", end=' ')
             try:
@@ -320,7 +323,7 @@ class Heimdall:
     def next_day(self, day):
         """
         Returns the timestamp of UTC midnight on the day following the timestamp given
- 
+
         >>> h = Heimdall('test')
         >>> import time
         >>> h.next_day(1534774799)
@@ -343,16 +346,16 @@ class Heimdall:
 
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
-        master_nick = self.get_master_nick_of_user(nick)
-        position = 0
+        master_nick = self.heimdall.normalise_nick(self.get_master_nick_of_user(nick))
+        position = 1
         pairs = self.get_count_user_pairs()
         pair = next(pairs)
         while True:
-            position += 1
-            if pair[1] == master_nick:
-                return position
-            elif pair is None:
+            if pair is None:
                 return None
+            elif self.heimdall.normalise_nick(pair[1]) == master_nick:
+                return position
+            position += 1
             pair = next(pairs)
 
     def get_master_nick_of_user(self, user):
@@ -375,12 +378,17 @@ class Heimdall:
         except:
             return "The position you specified was invalid."
 
-        # In case they pass a number larger than the number of users
         pairs = self.get_count_user_pairs()
+
+        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (self.use_logs, ))
+        total_posters = self.c.fetchall()[0][0]
+        if position > total_posters:
+            return f"Position not found; there have been {total_posters} posters in &{self.use_logs}."
+
         for i in range(position):
             name = next(pairs)[1]
 
-        return "The user at position {} is {}".format(position, name)
+        return "The user at position {} is @{}".format(position, self.heimdall.normalise_nick(name))
 
     def graph_data(self, data_x, data_y, title):
         """Graphs the data passed to it and returns a graph"""
@@ -599,7 +607,10 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             if i == 10:
                 break
 
-            # Get activity over the last 28 days
+        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (self.use_logs, ))
+        total_posters = self.c.fetchall()[0][0]
+
+        # Get activity over the last 28 days
         lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
         self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, lower_bound,))
         last_28_days = self.c.fetchall()
@@ -638,19 +649,29 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         if last_28_days is None:
             return f"There have been {count} posts in &{self.use_logs}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}"
         else:
-            busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
-            last_28_days.sort(key=operator.itemgetter(0))
+            if len(last_28_days) > 0:
+                busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+                last_28_days.sort(key=operator.itemgetter(0))
 
-            midnight = calendar.timegm(datetime.utcnow().date().timetuple())
-            messages_today = 0
-            if midnight in [tup[0] for tup in last_28_days]:
-                messages_today = dict(last_28_days)[midnight]
+                midnight = calendar.timegm(datetime.utcnow().date().timetuple())
+                messages_today = 0
+                if midnight in [tup[0] for tup in last_28_days]:
+                    messages_today = dict(last_28_days)[midnight]
 
-        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
+                busiest_last_28 = f" (the busiest was {busiest[0]} with {busiest[1]} messages sent)"
+
+            else:
+                messages_today = 0
+                busiest_last_28 = ""
+
+        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
 
     def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
-        return (f"Position {self.get_position(user)}")
+        rank = self.get_position(user)
+        if rank == None:
+            return f"User @{user} not found."
+        return f"Position {rank}"
 
     def get_user_engagement_table(self, user):
         """(self, user) -> table"""
