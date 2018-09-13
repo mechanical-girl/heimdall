@@ -1,1 +1,2 @@
+test_data.db filter=lfs diff=lfs merge=lfs -text
 test_DATA.DB filter=lfs diff=lfs merge=lfs -text
