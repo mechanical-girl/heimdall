@@ -1,5 +1,5 @@
-"""Heimdall is a monitoring, logging, and statistics generating bot.
-
+"""
+Heimdall is a monitoring, logging, and statistics generating bot.
 
 Heimdall will eventually have the ability to spread across multiple rooms.
 The goal is that as well as being able to monitor euphoria.io and provide
@@ -76,13 +76,10 @@ class Heimdall:
         self.heimdall = karelia.bot('Heimdall', self.room)
 
         self.files = {
-            'regex': 'data/heimdall/regex',
             'possible_rooms': 'data/heimdall/possible_rooms.json',
             'help_text': 'data/heimdall/help_text.json',
-            'block_list': 'data/heimdall/block_list.json',
             'imgur': 'data/heimdall/imgur.json',
-            'aylien': 'data/heimdall/aylien.json',
-            'summ_list': 'data/heimdall/summ_list.json'
+            'messages_delivered': 'data/heimdall/messages_delivered.json'
         }
 
         self.show("Loading files... ")
