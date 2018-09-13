@@ -346,15 +346,16 @@ class Heimdall:
 
     def get_position(self, nick):
         """Returns the rank the supplied nick has by number of messages"""
-        master_nick = self.get_master_nick_of_user(nick)
-        position = 0
+        master_nick = self.heimdall.normalise_nick(self.get_master_nick_of_user(nick))
+        position = 1
         pairs = self.get_count_user_pairs()
         pair = next(pairs)
         while True:
             if pair is None:
                 return None
-            elif pair[1] == master_nick:
+            elif self.heimdall.normalise_nick(pair[1]) == master_nick:
                 return position
+            position += 1
             pair = next(pairs)
 
     def get_master_nick_of_user(self, user):
@@ -377,12 +378,17 @@ class Heimdall:
         except:
             return "The position you specified was invalid."
 
-        # In case they pass a number larger than the number of users
         pairs = self.get_count_user_pairs()
+
+        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (self.use_logs, ))
+        total_posters = self.c.fetchall()[0][0]
+        if position > total_posters:
+            return f"Position not found; there have been {total_posters} posters in &{self.use_logs}."
+
         for i in range(position):
             name = next(pairs)[1]
 
-        return "The user at position {} is {}".format(position, name)
+        return "The user at position {} is @{}".format(position, self.heimdall.normalise_nick(name))
 
     def graph_data(self, data_x, data_y, title):
         """Graphs the data passed to it and returns a graph"""
@@ -601,7 +607,10 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             if i == 10:
                 break
 
-            # Get activity over the last 28 days
+        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (self.use_logs, ))
+        total_posters = self.c.fetchall()[0][0]
+
+        # Get activity over the last 28 days
         lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
         self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, lower_bound,))
         last_28_days = self.c.fetchall()
@@ -655,7 +664,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                 messages_today = 0
                 busiest_last_28 = ""
 
-        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
+        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
 
     def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
