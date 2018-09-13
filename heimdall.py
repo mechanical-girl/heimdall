@@ -96,6 +96,9 @@ class Heimdall:
                 with open(self.files[key], 'w') as f:
                     f.write('[]')
 
+            except json.decoder.JSONDecodeError:
+                self.show(f"Unable to read JSON from file {self.files[key]}. This suggests that the JSON in this file has been corrupted. The file will need to be manually edited before Heimdall can run successfully.")
+
         with open(self.files['help_text'], 'r') as f:
             self.show("Loading help text...", end=' ')
             try:
@@ -320,7 +323,7 @@ class Heimdall:
     def next_day(self, day):
         """
         Returns the timestamp of UTC midnight on the day following the timestamp given
- 
+
         >>> h = Heimdall('test')
         >>> import time
         >>> h.next_day(1534774799)
@@ -348,11 +351,10 @@ class Heimdall:
         pairs = self.get_count_user_pairs()
         pair = next(pairs)
         while True:
-            position += 1
-            if pair[1] == master_nick:
-                return position
-            elif pair is None:
+            if pair is None:
                 return None
+            elif pair[1] == master_nick:
+                return position
             pair = next(pairs)
 
     def get_master_nick_of_user(self, user):
@@ -638,19 +640,29 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         if last_28_days is None:
             return f"There have been {count} posts in &{self.use_logs}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}"
         else:
-            busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
-            last_28_days.sort(key=operator.itemgetter(0))
+            if len(last_28_days) > 0:
+                busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+                last_28_days.sort(key=operator.itemgetter(0))
 
-            midnight = calendar.timegm(datetime.utcnow().date().timetuple())
-            messages_today = 0
-            if midnight in [tup[0] for tup in last_28_days]:
-                messages_today = dict(last_28_days)[midnight]
+                midnight = calendar.timegm(datetime.utcnow().date().timetuple())
+                messages_today = 0
+                if midnight in [tup[0] for tup in last_28_days]:
+                    messages_today = dict(last_28_days)[midnight]
 
-        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days (the busiest was {busiest[0]} with {busiest[1]} messages sent).\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
+                busiest_last_28 = f" (the busiest was {busiest[0]} with {busiest[1]} messages sent)"
+
+            else:
+                messages_today = 0
+                busiest_last_28 = ""
+
+        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today), averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
 
     def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
-        return (f"Position {self.get_position(user)}")
+        rank = self.get_position(user)
+        if rank == None:
+            return f"User @{user} not found."
+        return f"Position {rank}"
 
     def get_user_engagement_table(self, user):
         """(self, user) -> table"""
