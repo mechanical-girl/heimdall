@@ -388,7 +388,7 @@ class Heimdall:
         for i in range(position):
             name = next(pairs)[1]
 
-        return "The user at position {} is @{}".format(position, self.heimdall.normalise_nick(name))
+        return "The user at position {} is @{}.".format(position, self.heimdall.normalise_nick(name))
 
     def graph_data(self, data_x, data_y, title):
         """Graphs the data passed to it and returns a graph"""

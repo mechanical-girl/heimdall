@@ -23,4 +23,4 @@ class TestAllFunctionsRun(unittest.TestCase):
         assert self.heimdall.get_user_at_position(4) == "The user at position 4 is @dogbarrier."
 
     def test_get_user_at_unknown_rank(self):
-        assert self.heimdall.get_user_at_position(1000) == "Position not found; there have been 145 posters posters in &xkcd."
+        assert self.heimdall.get_user_at_position(1000) == "Position not found; there have been 145 posters in &xkcd."
