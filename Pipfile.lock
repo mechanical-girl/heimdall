@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "b3c97fb39c0d8b71b0e7761b0f29ca357f118e2297942edf3aaea55db988da6c"
+            "sha256": "253073f79b1b375bac150a60b149be36e14954238be7028d8faa843ae82a7ea5"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -107,14 +107,6 @@
             ],
             "index": "pypi",
             "version": "==2.7"
-        },
-        "karelia": {
-            "hashes": [
-                "sha256:5a8884e17b71609f43aa752f4cc889d2154e8611c4bf609e1a4aacc51635542c",
-                "sha256:a0488c8c94cef0f56533119aaa34eeaf85a953c43197d808fffc7afdfadfc043"
-            ],
-            "index": "pypi",
-            "version": "==2.0.18"
         },
         "kiwisolver": {
             "hashes": [
@@ -332,11 +324,11 @@
         },
         "websocket-client": {
             "hashes": [
-                "sha256:030bbfbf29ac9e315ffb207ed5ed42b6981b5038ea00d1e13b02b872cc95e8f6",
-                "sha256:a35bac3d9647c62c1ba3e8a7340385d92981f5486b033557d592138fd4b21b90"
+                "sha256:03763384c530b331ec3822d0b52ffdc28c3aeb8a900ac8c98b2ceea3128a7b4e",
+                "sha256:3c9924675eaf0b27ae22feeeab4741bb4149b94820bd3a143eeaf8b62f64d821"
             ],
             "index": "pypi",
-            "version": "==0.51.0"
+            "version": "==0.52.0"
         }
     },
     "develop": {}
