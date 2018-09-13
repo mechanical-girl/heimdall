@@ -81,6 +81,17 @@ class Yggdrasil:
 def on_sigint(signum, frame):
     pass
 
+def run_deploy():
+    pull_result = subprocess.run(["git", "pull"], stdout=devnull, stderr=devnull).returncode
+    if pull_result != 0
+        return pull_result
+
+    update_result = subprocess.run(["./update"], stdout=devnull, stderr=devnull).returncode
+    if update_result != 0:
+        return update_result
+
+    return 0
+
 
 def main():
     importlib.reload(forseti)
@@ -110,12 +121,12 @@ def main():
 
                 elif message.data.content == '!deploy @Yggdrasil':
                     with open(os.devnull, 'w') as devnull:
-                        if subprocess.run(["git", "pull"], stdout=devnull, stderr=devnull).returncode == 0:
+                        if run_deploy() == 0:
                             yggdrasil.disconnect()
                             ygg.stop()
                             main()
                         else:
-                            yggdrasil.send('Pull failed - sorry.', message.data.id)
+                            yggdrasil.send('Deploy failed - sorry.', message.data.id)
 
     except Exception:
         yggdrasil.disconnect()
