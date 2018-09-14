@@ -6,6 +6,7 @@ import heimdall
 class TestAllFunctionsRun(unittest.TestCase):
     def setUp(self):
         self.heimdall = heimdall.Heimdall('test')
+        self.heimdall.use_logs = 'xkcd'
         self.heimdall.database = 'test_data.db'
         self.heimdall.connect_to_database()
 
@@ -22,5 +23,4 @@ class TestAllFunctionsRun(unittest.TestCase):
         self.heimdall.get_user_stats('alkdjbl\iugbzjkvblviu\.,seiuvb\le;siubs,lvkablifguawebl\ksdbflaeiuflefuilefiu\dl', ['messages', 'engagement', 'text'])
 
     def test_get_room_stats_runs(self):
-        # Not used since matplotlib is currently throwing an error -> self.heimdall.get_room_stats()
-        pass
+        self.heimdall.get_room_stats()
