@@ -83,7 +83,7 @@ def on_sigint(signum, frame):
 
 def run_deploy():
     pull_result = subprocess.run(["git", "pull"], stdout=devnull, stderr=devnull).returncode
-    if pull_result != 0
+    if pull_result != 0:
         return pull_result
 
     update_result = subprocess.run(["./update"], stdout=devnull, stderr=devnull).returncode
