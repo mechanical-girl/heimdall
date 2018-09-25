@@ -68,10 +68,13 @@ class Heimdall:
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
-        self.testing = False
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
+        if os.path.basename(os.path.dirname(os.path.realpath(__file__))) == "prod-yggdrasil":
+            self.prod = True
+        else:
+            self.prod = False
 
         self.heimdall = karelia.bot('Heimdall', self.room)
 
@@ -132,7 +135,7 @@ class Heimdall:
         self.check_or_create_tables()
         self.show("done")
 
-        if not self.testing:
+        if self.prod:
             self.heimdall.connect(True)
             self.show("Getting logs...")
             self.get_room_logs()
@@ -148,7 +151,7 @@ class Heimdall:
         self.conn.close()
 
         self.show("Ready")
-        if not self.testing:
+        if self.prod:
             self.heimdall.disconnect()
 
     def write_to_database(self, statement, **kwargs):
@@ -398,13 +401,13 @@ class Heimdall:
         plt.gcf().autofmt_xdate()
         ax.xaxis.set_major_locator(plt.MaxNLocator(10))
         ax.set_ylim(ymin=0)
-        return (f)
+        return f
 
     def save_graph(self, fig):
         """Saves the provided graph with a random filename"""
         filename = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10)) + ".png"
         fig.savefig(filename)
-        return (filename)
+        return filename
 
     def upload_and_delete_graph(self, filename):
         """Uploads passed file to imgur and deletes it"""
@@ -414,7 +417,7 @@ class Heimdall:
             self.heimdall.log()
             url = "Imgur upload failed, sorry."
         os.remove(filename)
-        return (url)
+        return url
 
     def get_aliases(self, user):
         normnick = self.heimdall.normalise_nick(user)
@@ -521,7 +524,7 @@ class Heimdall:
             title = "Messages by {}, last 28 days".format(user)
             data_x = [day[0] for day in last_28_days]
             data_y = [day[1] for day in last_28_days]
-            if self.testing:
+            if not self.prod:
                 last_28_url = "url_goes_here"
             else:
                 last_28_graph = self.graph_data(data_x, data_y, title)
@@ -531,7 +534,7 @@ class Heimdall:
             title = "Messages by {}, all time".format(user)
             data_x = [day[0] for day in days]
             data_y = [day[1] for day in days]
-            if self.testing:
+            if not self.prod:
                 all_time_url = "url_goes_here"
             else:
                 all_time_graph = self.graph_data(data_x, data_y, title)
@@ -629,7 +632,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         title = "Messages in &{}, last 28 days".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
-        if self.testing:
+        if not self.prod:
             last_28_url = 'last_28_url'
         else:
             last_28_graph = self.graph_data(data_x, data_y, title)
@@ -639,7 +642,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         title = "Messages in &{}, all time".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in messages_by_day]
         data_y = [day[1] for day in messages_by_day]
-        if self.testing:
+        if not self.prod:
             all_time_url = 'all_time_url'
         else:
             all_time_graph = self.graph_data(data_x, data_y, title)
