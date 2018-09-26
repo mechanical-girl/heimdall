@@ -48,6 +48,18 @@ class KillError(Exception):
     pass
 
 
+test_funcs = []
+prod_funcs = []
+
+def test(func):
+    test_funcs.append(func)
+    return func
+
+def prod(func):
+    prod_funcs.append(func)
+    return func
+
+
 class Heimdall:
     """Heimdall is the logging and statistics portion of the pantheon.
 
@@ -68,13 +80,15 @@ class Heimdall:
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
+        self.test_funcs = test_funcs
+        self.prod_funcs = prod_funcs
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
         if os.path.basename(os.path.dirname(os.path.realpath(__file__))) == "prod-yggdrasil":
-            self.prod = True
+            self.prod_env_env = True
         else:
-            self.prod = False
+            self.prod_env_env = False
 
         self.heimdall = karelia.bot('Heimdall', self.room)
 
@@ -135,7 +149,7 @@ class Heimdall:
         self.check_or_create_tables()
         self.show("done")
 
-        if self.prod:
+        if self.prod_env:
             self.heimdall.connect(True)
             self.show("Getting logs...")
             self.get_room_logs()
@@ -151,7 +165,7 @@ class Heimdall:
         self.conn.close()
 
         self.show("Ready")
-        if self.prod:
+        if self.prod_env:
             self.heimdall.disconnect()
 
     def write_to_database(self, statement, **kwargs):
@@ -524,7 +538,7 @@ class Heimdall:
             title = "Messages by {}, last 28 days".format(user)
             data_x = [day[0] for day in last_28_days]
             data_y = [day[1] for day in last_28_days]
-            if not self.prod:
+            if not self.prod_env:
                 last_28_url = "url_goes_here"
             else:
                 last_28_graph = self.graph_data(data_x, data_y, title)
@@ -534,7 +548,7 @@ class Heimdall:
             title = "Messages by {}, all time".format(user)
             data_x = [day[0] for day in days]
             data_y = [day[1] for day in days]
-            if not self.prod:
+            if not self.prod_env:
                 all_time_url = "url_goes_here"
             else:
                 all_time_graph = self.graph_data(data_x, data_y, title)
@@ -632,7 +646,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         title = "Messages in &{}, last 28 days".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
-        if not self.prod:
+        if not self.prod_env:
             last_28_url = 'last_28_url'
         else:
             last_28_graph = self.graph_data(data_x, data_y, title)
@@ -642,7 +656,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         title = "Messages in &{}, all time".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in messages_by_day]
         data_y = [day[1] for day in messages_by_day]
-        if not self.prod:
+        if not self.prod_env:
             all_time_url = 'all_time_url'
         else:
             all_time_graph = self.graph_data(data_x, data_y, title)
