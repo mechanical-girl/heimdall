@@ -28,10 +28,12 @@ from typing import Dict, List, Tuple, Union
 
 import karelia
 import matplotlib
-matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 import pyimgur
+
+matplotlib.use('TkAgg')
+
 
 
 class UpdateDone(Exception):
@@ -86,7 +88,7 @@ class Heimdall:
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
-        if os.path.basename(os.path.dirname(os.path.realpath(__file__))) == "prod-yggdrasil":
+        if os.path.basename(os.path.dirname(os.path.realpath(__file__))) == "prod-yggdrasil" or ('force_prod' in kwargs and kwargs['force_prod']):
             self.prod_env = True
         else:
             self.prod_env = False
@@ -448,7 +450,7 @@ class Heimdall:
         else:
             return [alias[0] for alias in reply]
 
-    @test
+    @prod
     def get_user_stats(self):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
@@ -801,17 +803,22 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
                 for func in self.prod_funcs:
-                    func()
+                    func(self)
 
                 if not self.prod_env:
                     for func in self.test_funcs:
                         func(self)
-         
+
                 if comm[0] == "!roomstats":
                     if len(comm) > 1:
                         self.heimdall.reply("Sorry, only stats for the current room are supported.")
                     else:
                         self.heimdall.reply(self.get_room_statss())
+
+                elif comm[0] == '!diag-dump':
+                    self.heimdall.reply(f"prod-funcs: {self.prod_funcs}")
+                    self.heimdall.reply(f"test-funcs: {self.test_funcs}")
+                    self.heimdall.reply(f"prod-env: {self.prod_env}")
 
                 elif comm[0] == "!rank":
                     if len(comm) > 1 and comm[1][0] == "@":
@@ -915,8 +922,9 @@ def main(room, **kwargs):
         new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(room) is str else room[0]
         verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
+        force_prod=kwargs['force_prod'] if 'force_prod' in kwargs else 'False' 
 
-        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
+        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod)
 
         try:
             heimdall.main()
@@ -932,6 +940,7 @@ if __name__ == '__main__':
     parser.add_argument("--stealth", help="If enabled, bot will not present on nicklist", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
     parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
+    parser.add_argument("-p", "--force-prod", action="store_true", dest="force_prod")
     parser.add_argument("--use-logs", type=str, dest="use_logs")
     args = parser.parse_args()
 
@@ -939,5 +948,6 @@ if __name__ == '__main__':
     stealth = args.stealth
     new_logs = args.new_logs
     use_logs = args.use_logs
-    verbose = args.verbose 
-    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
+    verbose = args.verbose
+    force_prod = args.force_prod
+    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod)
