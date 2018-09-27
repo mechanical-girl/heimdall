@@ -28,7 +28,6 @@ from typing import Dict, List, Tuple, Union
 
 import karelia
 import matplotlib
-matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 import pyimgur
@@ -47,18 +46,6 @@ class UnknownMode(Exception):
 class KillError(Exception):
     """Exception for when the bot is killed."""
     pass
-
-
-test_funcs = []
-prod_funcs = []
-
-def test(func):
-    test_funcs.append(func)
-    return func
-
-def prod(func):
-    prod_funcs.append(func)
-    return func
 
 
 class Heimdall:
@@ -81,15 +68,13 @@ class Heimdall:
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
-        self.test_funcs = test_funcs
-        self.prod_funcs = prod_funcs
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
         if os.path.basename(os.path.dirname(os.path.realpath(__file__))) == "prod-yggdrasil":
-            self.prod_env = True
+            self.prod = True
         else:
-            self.prod_env = False
+            self.prod = False
 
         self.heimdall = karelia.bot('Heimdall', self.room)
 
@@ -150,10 +135,11 @@ class Heimdall:
         self.check_or_create_tables()
         self.show("done")
 
-        self.heimdall.connect(True)
-        self.show("Getting logs...")
-        self.get_room_logs()
-        self.show("Done.")
+        if self.prod:
+            self.heimdall.connect(True)
+            self.show("Getting logs...")
+            self.get_room_logs()
+            self.show("Done.")
 
         try:
             self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (self.room, ))
@@ -165,8 +151,19 @@ class Heimdall:
         self.conn.close()
 
         self.show("Ready")
-        if self.prod_env:
+        if self.prod:
             self.heimdall.disconnect()
+
+        self.test_functions = []
+
+    def prod_function(self, func):
+        self.prod_functions.append(func)
+        return func
+
+    def test_function(*args):
+        def wrapper(*args):
+            self.test_functions.append(func)
+        return wrapper
 
     def write_to_database(self, statement, **kwargs):
         """Optionally, pass values=values, mode=mode."""
@@ -448,30 +445,28 @@ class Heimdall:
         else:
             return [alias[0] for alias in reply]
 
-    @test
+    @test_function
     def get_user_stats(self):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
 
-        comm = self.heimdall.packet.data.content.split()
-
-        if comm[0] != "!stats":
-            return
-        
-        options = []
-        user = self.heimdall.packet.data.sender.name
-        
-        if len(comm) > 1:
+        if self.heimdall.packet.data.content.split()[0] == "!stats":
+            comm = self.heimdall.packet.data.content.split()
             options = self.parse_options(comm[1:])
-            if len(comm) == 2 and comm[1].startswith("@"):
-                user = self.heimdall.normalise_nick(comm[1][1:])
-            elif options == []:
+
+            if len(options) == 0:
+                options = ['messages', 'engagement', 'text']
+
+            if len(comm) > 1 and comm[1][0] == "@":
+                user = comm[1][1:]
+            elif len(comm) == 1 or comm[1].startswith('-'):
+                user = message.data.sender.name
+            else:
                 self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
                 return
+        else:
+            return
 
-        if options == []:
-            options = ['messages', 'engagement', 'text']
-        
         normnick = self.heimdall.normalise_nick(user)
 
         if 'aliases' in options:
@@ -492,10 +487,10 @@ class Heimdall:
         count = self.c.fetchone()[0]
 
         if count == 0:
-            self.heimdall.reply('User @{} not found.'.format(user.replace(' ', '')))
+            return ('User @{} not found.'.format(user.replace(' ', '')))
 
         if options == ['aliases']:
-            self.heimdall.reply("No options specified. Please only use --aliases or -a in conjunction with --messages (or -m), --engagement (-e), --text (-t), or a combination thereof.")
+            return "No options specified. Please only use --aliases or -a in conjunction with --messages (or -m), --engagement (-e), --text (-t), or a combination thereof."
 
         if 'messages' in options:
             # Query gets the earliest message sent
@@ -559,7 +554,7 @@ class Heimdall:
             title = "Messages by {}, last 28 days".format(user)
             data_x = [day[0] for day in last_28_days]
             data_y = [day[1] for day in last_28_days]
-            if not self.prod_env:
+            if not self.prod:
                 last_28_url = "url_goes_here"
             else:
                 last_28_graph = self.graph_data(data_x, data_y, title)
@@ -569,7 +564,7 @@ class Heimdall:
             title = "Messages by {}, all time".format(user)
             data_x = [day[0] for day in days]
             data_y = [day[1] for day in days]
-            if not self.prod_env:
+            if not self.prod:
                 all_time_url = "url_goes_here"
             else:
                 all_time_graph = self.graph_data(data_x, data_y, title)
@@ -599,7 +594,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         else:
             message_results = ""
 
-        if 'engagement' in options:
+        if 'engagement' in options: 
             engagement_results = f"User engagement:\n{self.get_user_engagement_table(user)}\n"
         else:
             engagement_results = ""
@@ -667,7 +662,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         title = "Messages in &{}, last 28 days".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
-        if not self.prod_env:
+        if not self.prod:
             last_28_url = 'last_28_url'
         else:
             last_28_graph = self.graph_data(data_x, data_y, title)
@@ -677,7 +672,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         title = "Messages in &{}, all time".format(self.use_logs)
         data_x = [date.fromtimestamp(int(day[0])) for day in messages_by_day]
         data_y = [day[1] for day in messages_by_day]
-        if not self.prod_env:
+        if not self.prod:
             all_time_url = 'all_time_url'
         else:
             all_time_graph = self.graph_data(data_x, data_y, title)
@@ -788,6 +783,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         return options
 
     def parse(self, message):
+        print(self.test_functions)
         if message.type == 'send-event' or message.type == 'send-reply':
             self.insert_message(message)
             self.total_messages_all_time += 1
@@ -800,18 +796,17 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             comm = message.data.content.split()
 
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
-                for func in self.prod_funcs:
-                    func()
-
-                if not self.prod_env:
-                    for func in self.test_funcs:
-                        func(self)
-         
+                if self.prod:
+                    for func in self.prod_functions:
+                        func()
+                else:
+                    for func in self.test_functions:
+                        func()
                 if comm[0] == "!roomstats":
                     if len(comm) > 1:
                         self.heimdall.reply("Sorry, only stats for the current room are supported.")
                     else:
-                        self.heimdall.reply(self.get_room_statss())
+                        self.heimdall.reply(self.get_room_stats())
 
                 elif comm[0] == "!rank":
                     if len(comm) > 1 and comm[1][0] == "@":
