@@ -28,6 +28,7 @@ from typing import Dict, List, Tuple, Union
 
 import karelia
 import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 import pyimgur
@@ -86,9 +87,9 @@ class Heimdall:
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
         if os.path.basename(os.path.dirname(os.path.realpath(__file__))) == "prod-yggdrasil":
-            self.prod_env_env = True
+            self.prod_env = True
         else:
-            self.prod_env_env = False
+            self.prod_env = False
 
         self.heimdall = karelia.bot('Heimdall', self.room)
 
@@ -448,9 +449,30 @@ class Heimdall:
         else:
             return [alias[0] for alias in reply]
 
-    def get_user_stats(self, user, options):
+    @test
+    def get_user_stats(self):
         """Retrieves, formats and sends stats for user"""
         # First off, we'll get a known-good version of the requester name
+
+        comm = self.heimdall.packet.data.content.split()
+
+        if comm[0] != "!stats":
+            return
+        
+        options = []
+        user = self.heimdall.packet.data.sender.name
+        
+        if len(comm) > 1:
+            options = self.parse_options(comm[1:])
+            if len(comm) == 2 and comm[1].startswith("@"):
+                user = self.heimdall.normalise_nick(comm[1][1:])
+            elif options == []:
+                self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
+                return
+
+        if options == []:
+            options = ['messages', 'engagement', 'text']
+        
         normnick = self.heimdall.normalise_nick(user)
 
         if 'aliases' in options:
@@ -471,11 +493,12 @@ class Heimdall:
         count = self.c.fetchone()[0]
 
         if count == 0:
-            return ('User @{} not found.'.format(user.replace(' ', '')))
+            self.heimdall.reply('User @{} not found.'.format(user.replace(' ', '')))
 
         if options == ['aliases']:
-            return "No options specified. Please only use --aliases or -a in conjunction with --messages (or -m), --engagement (-e), --text (-t), or a combination thereof."
+            self.heimdall.reply("No options specified. Please only use --aliases or -a in conjunction with --messages (or -m), --engagement (-e), --text (-t), or a combination thereof.")
 
+        print('messages')
         if 'messages' in options:
             # Query gets the earliest message sent
             self.c.execute(f'''SELECT * FROM messages WHERE room IS ? AND normname IN ({', '.join(['?']*len(aliases))}) ORDER BY time ASC''', (self.use_logs, *aliases,))
@@ -578,7 +601,9 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         else:
             message_results = ""
 
-        if 'engagement' in options: 
+        print(options)
+        if 'engagement' in options:
+            print('engagement')
             engagement_results = f"User engagement:\n{self.get_user_engagement_table(user)}\n"
         else:
             engagement_results = ""
@@ -606,7 +631,8 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             text_results = ""
 
         # Collate and send the lot.
-        return (f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
+        print("sending")
+        self.heimdall.reply(f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
 
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
@@ -779,24 +805,18 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             comm = message.data.content.split()
 
             if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
-                if comm[0] == "!stats":
-                    options = self.parse_options(comm[1:])
+                for func in self.prod_funcs:
+                    func()
 
-                    if len(options) == 0:
-                        options = ['messages', 'engagement', 'text']
-
-                    if len(comm) > 1 and comm[1][0] == "@":
-                        self.heimdall.reply(self.get_user_stats(comm[1][1:], options))
-                    elif len(comm) == 1 or comm[1].startswith('-'):
-                        self.heimdall.reply(self.get_user_stats(message.data.sender.name, options))
-                    else:
-                        self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
-
-                elif comm[0] == "!roomstats":
+                if not self.prod_env:
+                    for func in self.test_funcs:
+                        func(self)
+         
+                if comm[0] == "!roomstats":
                     if len(comm) > 1:
                         self.heimdall.reply("Sorry, only stats for the current room are supported.")
                     else:
-                        self.heimdall.reply(self.get_room_stats())
+                        self.heimdall.reply(self.get_room_statss())
 
                 elif comm[0] == "!rank":
                     if len(comm) > 1 and comm[1][0] == "@":
