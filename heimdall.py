@@ -547,7 +547,7 @@ class Heimdall:
             if last_message_sent == self.date_from_timestamp(time.time()):
                 last_message_sent = "Today"
             else:
-                last_message_sent = "{} days ago, on {}".format(last_message_sent, days_since_last_message)
+                last_message_sent = f"{days_since_last_message} days ago, on {last_message_sent}"
 
             try:
                 avg_messages_per_day = int(count/number_of_days)
