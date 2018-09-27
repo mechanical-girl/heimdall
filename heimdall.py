@@ -459,21 +459,21 @@ class Heimdall:
 
         if comm[0] != "!stats":
             return
-        
+
         options = []
         user = self.heimdall.packet.data.sender.name
-        
+ 
         if len(comm) > 1:
             options = self.parse_options(comm[1:])
             if len(comm) == 2 and comm[1].startswith("@"):
                 user = self.heimdall.normalise_nick(comm[1][1:])
-            elif options == []:
+            elif options == [] or ('@' in [s[0] for s in comm] and not comm[1].startswith("@")):
                 self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
                 return
 
         if options == []:
             options = ['messages', 'engagement', 'text']
-        
+ 
         normnick = self.heimdall.normalise_nick(user)
 
         if 'aliases' in options:
