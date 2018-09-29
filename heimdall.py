@@ -631,6 +631,51 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         # Collate and send the lot.
         self.heimdall.reply(f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
 
+    @prod
+    def run_queries(self):
+        content = self.heimdall.packet.data.content
+        if not content.split()[0] in ['!query', '!query-concat'] or self.room != "test":
+            return
+
+        split_cont = content.split('!')
+        sender = ""
+
+        # Check for criteria
+        for cont in split_cont:
+            if cont.startswith('query'):
+                query_list = cont.split()
+            elif cont.startswith('sender'):
+                sender = self.heimdall.normalise_nick(cont.split()[1])
+
+        # Check for query types
+        if query_list[0] == 'query':
+            keywords = [' '.join(query_list[1:])]
+        elif query_list[0] == 'query-concat':
+            keywords = query_list[1:]
+
+        core = f'''SELECT * FROM messages WHERE room="{self.use_logs}" ORDER BY time ASC'''
+        if sender != "":
+            query = f'''SELECT content, sendername, normname, time FROM ({core}) WHERE normname="{sender}" ORDER BY time ASC'''
+        else:
+            query = core
+
+        query = f'''SELECT content, sendername, normname, time FROM ({query}) WHERE content LIKE "%{keywords[0]}%" ORDER BY time ASC'''
+        if query.startswith("query-concat ") and len(keywords) > 1:
+            for keyword in keywords[1:]:
+                query = f'''SELECT content, sendername, normname, time FROM ({query}) WHERE content LIKE "% {keyword} %" ORDER BY time ASC'''
+
+        query = f'''{query} LIMIT 100;'''
+        print(query)
+        self.c.execute(query)
+        results = self.c.fetchall()
+        if len(results) == 0:
+            self.heimdall.reply("No messages found")
+        send = ""
+        for result in results:
+            send += f"{result[1]}: {result[0]}\n"
+        self.heimdall.reply(send)
+
+
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
 
