@@ -665,7 +665,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                 query = f'''SELECT content, sendername, normname, time FROM ({query}) WHERE content LIKE "% {keyword} %" ORDER BY time ASC'''
 
         query = f'''{query} LIMIT 100;'''
-        print(query)
         self.c.execute(query)
         results = self.c.fetchall()
         if len(results) == 0:
