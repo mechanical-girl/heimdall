@@ -427,12 +427,16 @@ class Heimdall:
 
     def upload_and_delete_graph(self, filename):
         """Uploads passed file to imgur and deletes it"""
-        try:
-            url = self.imgur_client.upload_image(filename).link
-        except:
-            self.heimdall.log()
-            url = "Imgur upload failed, sorry."
-        os.remove(filename)
+        if self.prod_env:
+            try:
+                url = self.imgur_client.upload_image(filename).link
+            except:
+                self.heimdall.log()
+                url = "Imgur upload failed, sorry."
+            os.remove(filename)
+        else:
+            url = "fake_url_here"
+
         return url
 
     def get_aliases(self, user):
@@ -674,16 +678,34 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             send += f"{result[1]}: {result[0]}\n"
         self.heimdall.reply(send)
 
-
+    @prod
     def get_room_stats(self):
+        # TODO:
+        # - replace all calls to return() with calls to self.heimdall.reply()
         """Gets and sends stats for rooms"""
 
-        self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
-        count = self.c.fetchone()[0]
+        comm = self.heimdall.packet.data.content.split()
+
+        if comm[0] != "!roomstats":
+            return
+
+        if len(comm) == 2 and comm[1].startswith('&'):
+            self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (comm[1][1:], ))
+            count = self.c.fetchone()[0]
+            if count == 0:
+                self.heimdall.reply("I do not operate in that room.")
+                return
+            else:
+                room_requested = comm[1][1:]
+
+        elif len(comm) == 1: 
+            room_requested = self.use_logs
+            self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
+            count = self.c.fetchone()[0]
 
         # Calculate top ten posters of all time
         top_ten = ""
-        posters = self.get_count_user_pairs()
+        posters = self.get_count_user_pairs(room_requested)
         i = 0
         for pair in posters:
             i += 1
@@ -691,12 +713,12 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             if i == 10:
                 break
 
-        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (self.use_logs, ))
+        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (room_requested, ))
         total_posters = self.c.fetchall()[0][0]
 
         # Get activity over the last 28 days
         lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (self.use_logs, lower_bound,))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (room_requested, lower_bound,))
         last_28_days = self.c.fetchall()
 
         days = last_28_days[:]
@@ -707,48 +729,45 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         per_day_last_four_weeks = int(sum([count[1] for count in last_28_days]) / 28)
         last_28_days.sort(key=operator.itemgetter(1))
 
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (self.use_logs, ))
+        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (room_requested, ))
         messages_by_day = self.c.fetchall()
 
-        title = "Messages in &{}, last 28 days".format(self.use_logs)
+
+        title = "Messages in &{}, last 28 days".format(room_requested)
         data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
-        if not self.prod_env:
-            last_28_url = 'last_28_url'
-        else:
-            last_28_graph = self.graph_data(data_x, data_y, title)
-            last_28_file = self.save_graph(last_28_graph)
-            last_28_url = self.upload_and_delete_graph(last_28_file)
+        last_28_graph = self.graph_data(data_x, data_y, title)
+        last_28_file = self.save_graph(last_28_graph)
+        last_28_url = self.upload_and_delete_graph(last_28_file)
 
-        title = "Messages in &{}, all time".format(self.use_logs)
+        title = "Messages in &{}, all time".format(room_requested)
         data_x = [date.fromtimestamp(int(day[0])) for day in messages_by_day]
         data_y = [day[1] for day in messages_by_day]
-        if not self.prod_env:
-            all_time_url = 'all_time_url'
-        else:
-            all_time_graph = self.graph_data(data_x, data_y, title)
-            all_time_file = self.save_graph(all_time_graph)
-            all_time_url = self.upload_and_delete_graph(all_time_file)
+        all_time_graph = self.graph_data(data_x, data_y, title)
+        all_time_file = self.save_graph(all_time_graph)
+        all_time_url = self.upload_and_delete_graph(all_time_file)
 
         if last_28_days is None:
-            return f"There have been {count} posts in &{self.use_logs}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}"
+            self.heimdall.reply(f"There have been {count} posts in &{room_requested}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}")
+            return
+
+
+        if len(last_28_days) > 0:
+            busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+            last_28_days.sort(key=operator.itemgetter(0))
+
+            midnight = calendar.timegm(datetime.utcnow().date().timetuple())
+            messages_today = 0
+            if midnight in [tup[0] for tup in last_28_days]:
+                messages_today = dict(last_28_days)[midnight]
+
+            busiest_last_28 = f" (the busiest was {busiest[0]} with {busiest[1]} messages sent)"
+
         else:
-            if len(last_28_days) > 0:
-                busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
-                last_28_days.sort(key=operator.itemgetter(0))
+            messages_today = 0
+            busiest_last_28 = ""
 
-                midnight = calendar.timegm(datetime.utcnow().date().timetuple())
-                messages_today = 0
-                if midnight in [tup[0] for tup in last_28_days]:
-                    messages_today = dict(last_28_days)[midnight]
-
-                busiest_last_28 = f" (the busiest was {busiest[0]} with {busiest[1]} messages sent)"
-
-            else:
-                messages_today = 0
-                busiest_last_28 = ""
-
-        return f"There have been {count} posts in &{self.use_logs} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}"
+        self.heimdall.reply(f"There have been {count} posts in &{room_requested} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}")
 
     def get_rank_of_user(self, user):
         """Gets and sends the position of the supplied user"""
@@ -789,9 +808,9 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
         return f"{table}"
 
-    def get_count_user_pairs(self):
+    def get_count_user_pairs(self, room_requested):
         """Iterator which yields (posts, user) tuple"""
-        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (self.use_logs, ))
+        self.c.execute('''SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC''', (room_requested, ))
         while True:
             result = self.c.fetchone()
             yield result
@@ -852,12 +871,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                 if not self.prod_env:
                     for func in self.test_funcs:
                         func(self)
-
-                if comm[0] == "!roomstats":
-                    if len(comm) > 1:
-                        self.heimdall.reply("Sorry, only stats for the current room are supported.")
-                    else:
-                        self.heimdall.reply(self.get_room_statss())
 
                 elif comm[0] == '!diag-dump':
                     self.heimdall.reply(f"prod-funcs: {self.prod_funcs}")
