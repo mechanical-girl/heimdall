@@ -279,7 +279,7 @@ class Heimdall:
                         update_done = True
                     else:
                         self.heimdall.send({'type': 'log', 'data': {'n': 1000, 'before': reply.data.log[0]['id']}})
- 
+
                         disp = reply.data.log[0]
 
                         safe_content = disp['content'].split('\n')[0][0:80].translate(self.heimdall.non_bmp_map)
@@ -367,7 +367,7 @@ class Heimdall:
         """Returns the rank the supplied nick has by number of messages"""
         master_nick = self.heimdall.normalise_nick(self.get_master_nick_of_user(nick))
         position = 1
-        pairs = self.get_count_user_pairs()
+        pairs = self.get_count_user_pairs(self.use_logs)
         pair = next(pairs)
         while True:
             if pair is None:
@@ -387,7 +387,7 @@ class Heimdall:
         except IndexError:
             return user
 
-    def get_user_at_position(self, position):
+    def get_user_at_position(self, position, room_requested):
         """Returns the user at the specified position"""
 
         # Check to see they've passed a number
@@ -397,17 +397,16 @@ class Heimdall:
         except:
             return "The position you specified was invalid."
 
-        pairs = self.get_count_user_pairs()
-
         self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (self.use_logs, ))
         total_posters = self.c.fetchall()[0][0]
         if position > total_posters:
             return f"Position not found; there have been {total_posters} posters in &{self.use_logs}."
 
+        pairs = self.get_count_user_pairs(room_requested)
         for i in range(position):
             name = next(pairs)[1]
 
-        return "The user at position {} is @{}.".format(position, self.heimdall.normalise_nick(name))
+        return f"The user at position {position} is @{name}."
 
     def graph_data(self, data_x, data_y, title):
         """Graphs the data passed to it and returns a graph"""
@@ -466,7 +465,7 @@ class Heimdall:
 
         options = []
         user = self.heimdall.packet.data.sender.name
- 
+
         if len(comm) > 1:
             options = self.parse_options(comm[1:])
             if len(comm) == 2 and comm[1].startswith("@"):
@@ -477,7 +476,7 @@ class Heimdall:
 
         if options == []:
             options = ['messages', 'engagement', 'text']
- 
+
         normnick = self.heimdall.normalise_nick(user)
 
         if 'aliases' in options:
@@ -620,14 +619,14 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             average_message_words = 0
             average_message_characters = 0
             sample_size = len(messages)
- 
+
             for message in messages:
                 average_message_words += len(message.split())
                 average_message_characters += len(message)
             average_message_words /= sample_size
             average_message_characters /= sample_size
 
-            text_results += f"Average words per message:\t\t{int(average_message_words)}\nAverage characters per message:\t{int(average_message_characters)}\n(Sample size of {sample_size})\n\n" 
+            text_results += f"Average words per message:\t\t{int(average_message_words)}\nAverage characters per message:\t{int(average_message_characters)}\n(Sample size of {sample_size})\n\n"
 
         else:
             text_results = ""
@@ -678,10 +677,38 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             send += f"{result[1]}: {result[0]}\n"
         self.heimdall.reply(send)
 
+    @test
+    def get_rank(self):
+        """Gets and sends the rank of the requested user, or the user at the requested rank"""
+
+        comm = self.heimdall.packet.data.content.split()
+        if comm[0] != "!rank":
+            return
+
+        if len(comm) > 1 and comm[1][0] == "@":
+            # If a user is specified, meaning that comm[1] should have an @ and then a name
+
+            user = comm[1][1:]
+
+            rank = self.get_position(user)
+            if rank is None:
+                self.heimdall.reply(f"User @{user} not found.")
+            self.heimdall.reply(f"Position {rank}")
+
+        elif len(comm) > 1:
+            # Assume that the request is for the user at a certain rank, meaning that comm[1] should be a number
+            try:
+                pos = int(comm[1])
+                self.heimdall.reply(self.get_user_at_position(pos, self.use_logs))
+            except ValueError:
+                self.heimdall.reply("Sorry, no name or number detected. Syntax is !rank (@user|<number>)")
+
+        else:
+            # No parameters offered; we assume that the user wants their own rank
+            self.heimdall.reply(f"Position {self.get_position(self.heimdall.packet.data.sender.name)}")
+
     @prod
     def get_room_stats(self):
-        # TODO:
-        # - replace all calls to return() with calls to self.heimdall.reply()
         """Gets and sends stats for rooms"""
 
         comm = self.heimdall.packet.data.content.split()
@@ -732,7 +759,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (room_requested, ))
         messages_by_day = self.c.fetchall()
 
-
         title = "Messages in &{}, last 28 days".format(room_requested)
         data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
         data_y = [day[1] for day in last_28_days]
@@ -751,7 +777,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             self.heimdall.reply(f"There have been {count} posts in &{room_requested}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}")
             return
 
-
         if len(last_28_days) > 0:
             busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
             last_28_days.sort(key=operator.itemgetter(0))
@@ -768,13 +793,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             busiest_last_28 = ""
 
         self.heimdall.reply(f"There have been {count} posts in &{room_requested} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}")
-
-    def get_rank_of_user(self, user):
-        """Gets and sends the position of the supplied user"""
-        rank = self.get_position(user)
-        if rank == None:
-            return f"User @{user} not found."
-        return f"Position {rank}"
 
     def get_user_engagement_table(self, user):
         """(self, user) -> table"""
@@ -838,17 +856,32 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         ['text']
         >>> h.parse_options(['--aliases','--messages','--engagement','--test'])
         ['aliases', 'messages', 'engagement']
+        >>> h.parse_options(['-meta'])
+        ['aliases', 'messages', 'engagement', 'text']
+        >>> h.parse_options(['-m'])
+        ['messages']
+        >>> h.parse_options(['-m', '--engagement'])
+        ['messages', 'engagement']
         """
         options = []
         for arg in options_list:
             if arg in ['-a', '--aliases']:
                 options.append('aliases')
-            if arg in ['-m', '--messages']:
+            elif arg in ['-m', '--messages']:
                 options.append('messages')
             elif arg in ['-e', '--engagement']:
                 options.append('engagement')
             elif arg in ['-t', '--text']:
                 options.append('text')
+            elif arg.startswith('-') and not arg.startswith('--'):
+                if 'a' in arg and 'aliases' not in options_list:
+                    options.append('aliases')
+                if 'm' in arg and 'messages' not in options_list:
+                    options.append('messages')
+                if 'e' in arg and 'engagement' not in options_list:
+                    options.append('engagement')
+                if 't' in arg and 'text' not in options_list:
+                    options.append('text')
 
         return options
 
@@ -864,7 +897,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
             comm = message.data.content.split()
 
-            if len(comm) > 0 and len(comm[0][0]) > 0 and comm[0][0] == "!":
+            if len(comm) > 0 and len(comm[0]) > 0 and comm[0][0] == "!":
                 for func in self.prod_funcs:
                     func(self)
 
@@ -872,22 +905,10 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                     for func in self.test_funcs:
                         func(self)
 
-                elif comm[0] == '!diag-dump':
+                if comm[0] == '!diag-dump':
                     self.heimdall.reply(f"prod-funcs: {self.prod_funcs}")
                     self.heimdall.reply(f"test-funcs: {self.test_funcs}")
                     self.heimdall.reply(f"prod-env: {self.prod_env}")
-
-                elif comm[0] == "!rank":
-                    if len(comm) > 1 and comm[1][0] == "@":
-                        self.heimdall.reply(self.get_rank_of_user(comm[1][1:]))
-                    elif len(comm) > 1:
-                        try:
-                            pos = int(comm[1])
-                            self.heimdall.reply(self.get_user_at_position(pos))
-                        except ValueError:
-                            self.heimdall.reply("Sorry, no name or number detected. Syntax is !rank (@user|<number>)")
-                    else:
-                        self.heimdall.reply(self.get_rank_of_user(message.data.sender.name))
 
                 elif comm[0] == "!alias":
                     while True:
@@ -959,7 +980,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             self.conn.close()
             self.heimdall.disconnect()
             raise KillError
-        except Exception:
+        except:
             self.heimdall.log()
             self.conn.close()
             self.heimdall.disconnect()
@@ -979,7 +1000,7 @@ def main(room, **kwargs):
         new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(room) is str else room[0]
         verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
-        force_prod=kwargs['force_prod'] if 'force_prod' in kwargs else 'False' 
+        force_prod = kwargs['force_prod'] if 'force_prod' in kwargs else 'False'
 
         heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod)
 
