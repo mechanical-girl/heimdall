@@ -397,14 +397,14 @@ class Heimdall:
         except:
             return "The position you specified was invalid."
 
-        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (self.use_logs, ))
+        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (room_requested, ))
         total_posters = self.c.fetchall()[0][0]
         if position > total_posters:
             return f"Position not found; there have been {total_posters} posters in &{self.use_logs}."
 
         pairs = self.get_count_user_pairs(room_requested)
         for i in range(position):
-            name = next(pairs)[1]
+            name = "".join(next(pairs)[1].split())
 
         return f"The user at position {position} is @{name}."
 
@@ -498,6 +498,7 @@ class Heimdall:
 
         if count == 0:
             self.heimdall.reply('User @{} not found.'.format(user.replace(' ', '')))
+            return
 
         if options == ['aliases']:
             self.heimdall.reply("No options specified. Please only use --aliases or -a in conjunction with --messages (or -m), --engagement (-e), --text (-t), or a combination thereof.")
@@ -693,7 +694,8 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             rank = self.get_position(user)
             if rank is None:
                 self.heimdall.reply(f"User @{user} not found.")
-            self.heimdall.reply(f"Position {rank}")
+            else:
+                self.heimdall.reply(f"Position {rank}")
 
         elif len(comm) > 1:
             # Assume that the request is for the user at a certain rank, meaning that comm[1] should be a number
@@ -725,7 +727,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             else:
                 room_requested = comm[1][1:]
 
-        elif len(comm) == 1: 
+        elif len(comm) == 1:
             room_requested = self.use_logs
             self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
             count = self.c.fetchone()[0]
