@@ -51,18 +51,6 @@ class KillError(Exception):
     pass
 
 
-test_funcs = []
-prod_funcs = []
-
-def test(func):
-    test_funcs.append(func)
-    return func
-
-def prod(func):
-    prod_funcs.append(func)
-    return func
-
-
 class Heimdall:
     """Heimdall is the logging and statistics portion of the pantheon.
 
@@ -129,7 +117,7 @@ class Heimdall:
                     self.heimdall.stock_responses['long_help'] += "\nThis is a testing instance and may not be reliable."
                 self.show("done")
             except Exception:
-                self.heimdall.log()
+                self.heimdall.log(logfile="Heimdall.log")
                 self.show(f"Error creating help text - see 'Heimdall &{self.room}.log' for details.")
 
         with open(self.files['imgur'], 'r') as f:
@@ -139,9 +127,8 @@ class Heimdall:
                 self.imgur_client = pyimgur.Imgur(self.imgur_key)
                 self.show("done")
             except Exception:
-                self.heimdall.log()
+                self.heimdall.log(logfile="Heimdall.log")
                 self.show(f"Error reading imgur key - see 'Heimdall &{self.room}.log' for details.")
-
 
         self.connect_to_database()
         self.show("Connecting to database...", end=' ')
@@ -162,7 +149,7 @@ class Heimdall:
             self.total_messages_all_time = self.c.fetchone()[0]
         except:
             self.total_messages_all_time = 0
-            self.heimdall.log()
+            self.heimdall.log(logfile="Heimdall.log")
 
         self.conn.close()
 
@@ -430,7 +417,7 @@ class Heimdall:
             try:
                 url = self.imgur_client.upload_image(filename).link
             except:
-                self.heimdall.log()
+                self.heimdall.log(logfile="Heimdall.log")
                 url = "Imgur upload failed, sorry."
             os.remove(filename)
         else:
@@ -977,13 +964,13 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         except KeyboardInterrupt:
             sys.exit(0)
         except KillError:
-            self.heimdall.log()
+            self.heimdall.log(logfile="Heimdall.log")
             self.conn.commit()
             self.conn.close()
             self.heimdall.disconnect()
             raise KillError
         except:
-            self.heimdall.log()
+            self.heimdall.log(logfile="Heimdall.log")
             self.conn.close()
             self.heimdall.disconnect()
         finally:
@@ -994,8 +981,22 @@ def on_sigint(signum, frame):
     sys.exit()
 
 
-def main(room, **kwargs):
+test_funcs = []
+prod_funcs = []
+
+
+def test(func):
+    test_funcs.append(func)
+    return func
+
+
+def prod(func):
+    prod_funcs.append(func)
+    return func
     signal.signal(signal.SIGINT, on_sigint)
+
+
+def main(room, **kwargs):
 
     while True:
         stealth = kwargs['stealth'] if 'stealth' in kwargs else False
