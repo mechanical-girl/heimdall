@@ -34,7 +34,19 @@ import pyimgur
 
 matplotlib.use('TkAgg')
 
+test_funcs = []
+prod_funcs = []
 
+
+def test(func):
+    test_funcs.append(func)
+    return func
+
+
+def prod(func):
+    prod_funcs.append(func)
+    return func
+    signal.signal(signal.SIGINT, on_sigint)
 
 class UpdateDone(Exception):
     """Exception meaning that logs are up to date"""
@@ -979,21 +991,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
 def on_sigint(signum, frame):
     sys.exit()
-
-
-test_funcs = []
-prod_funcs = []
-
-
-def test(func):
-    test_funcs.append(func)
-    return func
-
-
-def prod(func):
-    prod_funcs.append(func)
-    return func
-    signal.signal(signal.SIGINT, on_sigint)
 
 
 def main(room, **kwargs):
