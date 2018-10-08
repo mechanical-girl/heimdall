@@ -7,9 +7,10 @@ import subprocess
 import sys
 import time
 
+import karelia
+
 import forseti
 import heimdall
-import karelia
 
 
 class UpdateDone(Exception):
@@ -81,14 +82,16 @@ class Yggdrasil:
 def on_sigint(signum, frame):
     pass
 
-def run_deploy():
-    pull_result = subprocess.run(["git", "pull"], stdout=devnull, stderr=devnull).returncode
-    if pull_result != 0:
-        return pull_result
 
-    update_result = subprocess.run(["./update"], stdout=devnull, stderr=devnull).returncode
-    if update_result != 0:
-        return update_result
+def run_deploy():
+    with open(os.devnull, 'w') as devnull:
+        pull_result = subprocess.run(["git", "pull"], stdout=devnull, stderr=devnull).returncode
+        if pull_result != 0:
+            return pull_result
+
+        update_result = subprocess.run(["update.sh"], stdout=devnull, stderr=devnull).returncode
+        if update_result != 0:
+            return update_result
 
     return 0
 
@@ -120,13 +123,12 @@ def main():
                     main()
 
                 elif message.data.content == '!deploy @Yggdrasil':
-                    with open(os.devnull, 'w') as devnull:
-                        if run_deploy() == 0:
-                            yggdrasil.disconnect()
-                            ygg.stop()
-                            main()
-                        else:
-                            yggdrasil.send('Deploy failed - sorry.', message.data.id)
+                    if run_deploy() == 0:
+                        yggdrasil.disconnect()
+                        ygg.stop()
+                        main()
+                    else:
+                        yggdrasil.send('Deploy failed - sorry.', message.data.id)
 
     except Exception:
         yggdrasil.disconnect()
