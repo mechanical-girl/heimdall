@@ -982,10 +982,10 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             self.heimdall.disconnect()
             raise KillError
         except:
-            self.heimdall.log(logfile="Heimdall.log")
             self.conn.close()
             self.heimdall.disconnect()
         finally:
+            self.heimdall.log(logfile="Heimdall.log")
             time.sleep(1)
 
 
