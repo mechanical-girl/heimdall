@@ -251,13 +251,6 @@ class Heimdall:
         self.heimdall.send({'type': 'log', 'data': {'n': 1000}})
 
         # Query gets the most recent message sent so that we have something to compare to. If Heimdall is running in stand-alone mode, the sqlite3.IntegrityError that gets raised to signal that the logs are up to date will be received, but if it is writing to the database via Forseti, it has no way to receive that exception, so we have to check manually for that usecase.
-        try:
-            self.c.execute('''SELECT * FROM messages WHERE room IS ? ORDER BY time DESC''', (self.room, ))
-            latest = self.c.fetchone()
-            latest_id = latest[8] if latest is not None else None
-        except sqlite3.OperationalError:
-            latest_id = None
-        self.show(f"{self.room}: {latest_id}")
         update_done = False
 
         while True:
@@ -285,8 +278,6 @@ class Heimdall:
                         self.show(f"    ({datetime.utcfromtimestamp(disp['time']).strftime('%Y-%m-%d %H:%M')} in &{self.room})[{disp['sender']['name'].translate(self.heimdall.non_bmp_map)}] {safe_content}")
                     # Append the data in this message to the data list ready for executemany
                     for message in reply.data.log:
-                        if latest_id == f"{self.room}{message['id']}":
-                            update_done = True
                         if 'parent' not in message:
                             message['parent'] = ''
                         data.append(
@@ -301,7 +292,7 @@ class Heimdall:
                     # break out of the loop and we will assume that the logs are now
                     # up to date.
                     try:
-                        self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data, mode="executemany")
+                        self.write_to_database('''INSERT INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data, mode="executemany")
                     except sqlite3.IntegrityError:
                         raise UpdateDone
 
@@ -982,10 +973,10 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             self.heimdall.disconnect()
             raise KillError
         except:
-            self.heimdall.log(logfile="Heimdall.log")
             self.conn.close()
             self.heimdall.disconnect()
         finally:
+            self.heimdall.log(logfile="Heimdall.log")
             time.sleep(1)
 
 
