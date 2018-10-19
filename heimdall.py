@@ -291,9 +291,9 @@ class Heimdall:
                     # Attempts to insert all the messages in bulk. If it fails, it will
                     # break out of the loop and we will assume that the logs are now
                     # up to date.
-                    try:
-                        self.write_to_database('''INSERT INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data, mode="executemany")
-                    except sqlite3.IntegrityError:
+                    self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data, mode="executemany")
+                    self.c.execute('''SELECT COUNT(*) FROM messages WHERE globalid=?''', (data[0][8],))
+                    if self.c.fetchone()[0] == 1:
                         raise UpdateDone
 
                     if update_done:
