@@ -201,18 +201,6 @@ class Heimdall:
         """
         Only print if self.verbose or verbose=True in kwargs
 
-        >>> h = Heimdall('test')
-        >>> h.show('Test', override=True, end='')
-        Test 
-        >>> h.show('Tes', end='t')
-        >>> h.show('Test')
-        >>> h.verbose = True
-        >>> h.show('Test')
-        Test 
-        <BLANKLINE>
-        >>> h.show('Test', override=False)
-        Test 
-        <BLANKLINE>
         """
 
         override = True if 'override' in kwargs and kwargs['override'] else False
