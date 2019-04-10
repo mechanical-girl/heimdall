@@ -12,6 +12,7 @@ import argparse
 import calendar
 import codecs
 import json
+import logging
 import operator
 import os
 import random
@@ -37,6 +38,7 @@ matplotlib.use('TkAgg')
 test_funcs = []
 prod_funcs = []
 
+logging.basicConfig(filename='Heimdall.log', filemode='a', format='\n\n\n--------------------\n%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
 
 def test(func):
     test_funcs.append(func)
@@ -85,6 +87,7 @@ class Heimdall:
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
         self.test_funcs = test_funcs
         self.prod_funcs = prod_funcs
+        self.show(self.force_new_logs)
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
@@ -129,7 +132,7 @@ class Heimdall:
                     self.heimdall.stock_responses['long_help'] += "\nThis is a testing instance and may not be reliable."
                 self.show("done")
             except Exception:
-                self.heimdall.log(logfile="Heimdall.log")
+                logging.exception("Error creating help text.")
                 self.show(f"Error creating help text - see 'Heimdall &{self.room}.log' for details.")
 
         with open(self.files['imgur'], 'r') as f:
@@ -139,7 +142,7 @@ class Heimdall:
                 self.imgur_client = pyimgur.Imgur(self.imgur_key)
                 self.show("done")
             except Exception:
-                self.heimdall.log(logfile="Heimdall.log")
+                logging.exception("Failed to create imgur client.")
                 self.show(f"Error reading imgur key - see 'Heimdall &{self.room}.log' for details.")
 
         self.connect_to_database()
@@ -152,7 +155,7 @@ class Heimdall:
         self.show("done")
 
         self.heimdall.connect(True)
-        self.show("Getting logs...")
+        self.show("Getting logs...", end=' ')
         self.get_room_logs()
         self.show("Done.")
 
@@ -161,7 +164,8 @@ class Heimdall:
             self.total_messages_all_time = self.c.fetchone()[0]
         except:
             self.total_messages_all_time = 0
-            self.heimdall.log(logfile="Heimdall.log")
+            logging.info("Apparently no messages in the room.")
+
 
         self.conn.close()
 
@@ -214,7 +218,7 @@ class Heimdall:
         override = True if 'override' in kwargs and kwargs['override'] else False
         end = kwargs['end'] if 'end' in kwargs else '\n'
         if self.verbose or override:
-            print(*args, end)
+            print(*args, end=end)
 
     def check_or_create_tables(self):
         """
@@ -266,8 +270,10 @@ class Heimdall:
                 if reply.type == 'log-reply':
                     # Check if the log-reply is empty, i.e. the last log-reply contained exactly the first 1000 messages in the room's history
                     if len(reply.data.log) == 0:
+                        self.show("Log update done; empty message received.")
                         raise UpdateDone
                     elif len(reply.data.log) < 1000:
+                        self.show("Log update done; less than 1000 messages received.")
                         update_done = True
                     else:
                         self.heimdall.send({'type': 'log', 'data': {'n': 1000, 'before': reply.data.log[0]['id']}})
@@ -291,10 +297,11 @@ class Heimdall:
                     # Attempts to insert all the messages in bulk. If it fails, it will
                     # break out of the loop and we will assume that the logs are now
                     # up to date.
-                    self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data, mode="executemany")
                     self.c.execute('''SELECT COUNT(*) FROM messages WHERE globalid=?''', (data[0][8],))
                     if self.c.fetchone()[0] == 1:
+                        self.show("Log update done; most recent message in ther DB has been reached.")
                         raise UpdateDone
+                    self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data, mode="executemany")
 
                     if update_done:
                         raise UpdateDone
@@ -303,6 +310,8 @@ class Heimdall:
                     self.insert_message(reply)
 
             except UpdateDone:
+                break
+            except sqlite3.IntegrityError:
                 break
 
     def insert_message(self, message):
@@ -420,7 +429,7 @@ class Heimdall:
             try:
                 url = self.imgur_client.upload_image(filename).link
             except:
-                self.heimdall.log(logfile="Heimdall.log")
+                logging.exception("Imgur upload failed")
                 url = "Imgur upload failed, sorry."
             os.remove(filename)
         else:
@@ -702,89 +711,91 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
     @prod
     def get_room_stats(self):
         """Gets and sends stats for rooms"""
+        try:
+            comm = self.heimdall.packet.data.content.split()
 
-        comm = self.heimdall.packet.data.content.split()
-
-        if comm[0] != "!roomstats":
-            return
-
-        if len(comm) == 2 and comm[1].startswith('&'):
-            self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (comm[1][1:], ))
-            count = self.c.fetchone()[0]
-            if count == 0:
-                self.heimdall.reply("I do not operate in that room.")
+            if comm[0] != "!roomstats":
                 return
+
+            if len(comm) == 2 and comm[1].startswith('&'):
+                self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (comm[1][1:], ))
+                count = self.c.fetchone()[0]
+                if count == 0:
+                    self.heimdall.reply("I do not operate in that room.")
+                    return
+                else:
+                    room_requested = comm[1][1:]
+
+            elif len(comm) == 1:
+                room_requested = self.use_logs
+                self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
+                count = self.c.fetchone()[0]
+
+            # Calculate top ten posters of all time
+            top_ten = ""
+            posters = self.get_count_user_pairs(room_requested)
+            i = 0
+            for pair in posters:
+                i += 1
+                top_ten += "{:2d}) {:<7}\t{}\n".format(i, int(pair[0]), pair[1])
+                if i == 10:
+                    break
+
+            self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (room_requested, ))
+            total_posters = self.c.fetchall()[0][0]
+
+            # Get activity over the last 28 days
+            lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
+            self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (room_requested, lower_bound,))
+            last_28_days = self.c.fetchall()
+
+            days = last_28_days[:]
+            last_28_days = []
+            for day in days:
+                last_28_days.append((self.next_day(day[0]) - 60 * 60 * 24, day[1],))
+
+            per_day_last_four_weeks = int(sum([count[1] for count in last_28_days]) / 28)
+            last_28_days.sort(key=operator.itemgetter(1))
+
+            self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (room_requested, ))
+            messages_by_day = self.c.fetchall()
+
+            title = "Messages in &{}, last 28 days".format(room_requested)
+            data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
+            data_y = [day[1] for day in last_28_days]
+            last_28_graph = self.graph_data(data_x, data_y, title)
+            last_28_file = self.save_graph(last_28_graph)
+            last_28_url = self.upload_and_delete_graph(last_28_file)
+
+            title = "Messages in &{}, all time".format(room_requested)
+            data_x = [date.fromtimestamp(int(day[0])) for day in messages_by_day]
+            data_y = [day[1] for day in messages_by_day]
+            all_time_graph = self.graph_data(data_x, data_y, title)
+            all_time_file = self.save_graph(all_time_graph)
+            all_time_url = self.upload_and_delete_graph(all_time_file)
+
+            if last_28_days is None:
+                self.heimdall.reply(f"There have been {count} posts in &{room_requested}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}")
+                return
+
+            if len(last_28_days) > 0:
+                busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+                last_28_days.sort(key=operator.itemgetter(0))
+
+                midnight = calendar.timegm(datetime.utcnow().date().timetuple())
+                messages_today = 0
+                if midnight in [tup[0] for tup in last_28_days]:
+                    messages_today = dict(last_28_days)[midnight]
+
+                busiest_last_28 = f" (the busiest was {busiest[0]} with {busiest[1]} messages sent)"
+
             else:
-                room_requested = comm[1][1:]
+                messages_today = 0
+                busiest_last_28 = ""
 
-        elif len(comm) == 1:
-            room_requested = self.use_logs
-            self.c.execute('''SELECT count(*) FROM messages WHERE room IS ?''', (self.use_logs, ))
-            count = self.c.fetchone()[0]
-
-        # Calculate top ten posters of all time
-        top_ten = ""
-        posters = self.get_count_user_pairs(room_requested)
-        i = 0
-        for pair in posters:
-            i += 1
-            top_ten += "{:2d}) {:<7}\t{}\n".format(i, int(pair[0]), pair[1])
-            if i == 10:
-                break
-
-        self.c.execute('''SELECT COUNT(*) FROM (SELECT COUNT(*) AS amount, CASE master IS NULL WHEN TRUE THEN sendername ELSE master END AS name FROM messages LEFT JOIN aliases ON normname=normalias WHERE room=? GROUP BY name ORDER BY amount DESC)''', (room_requested, ))
-        total_posters = self.c.fetchall()[0][0]
-
-        # Get activity over the last 28 days
-        lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (room_requested, lower_bound,))
-        last_28_days = self.c.fetchall()
-
-        days = last_28_days[:]
-        last_28_days = []
-        for day in days:
-            last_28_days.append((self.next_day(day[0]) - 60 * 60 * 24, day[1],))
-
-        per_day_last_four_weeks = int(sum([count[1] for count in last_28_days]) / 28)
-        last_28_days.sort(key=operator.itemgetter(1))
-
-        self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (room_requested, ))
-        messages_by_day = self.c.fetchall()
-
-        title = "Messages in &{}, last 28 days".format(room_requested)
-        data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
-        data_y = [day[1] for day in last_28_days]
-        last_28_graph = self.graph_data(data_x, data_y, title)
-        last_28_file = self.save_graph(last_28_graph)
-        last_28_url = self.upload_and_delete_graph(last_28_file)
-
-        title = "Messages in &{}, all time".format(room_requested)
-        data_x = [date.fromtimestamp(int(day[0])) for day in messages_by_day]
-        data_y = [day[1] for day in messages_by_day]
-        all_time_graph = self.graph_data(data_x, data_y, title)
-        all_time_file = self.save_graph(all_time_graph)
-        all_time_url = self.upload_and_delete_graph(all_time_file)
-
-        if last_28_days is None:
-            self.heimdall.reply(f"There have been {count} posts in &{room_requested}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}")
-            return
-
-        if len(last_28_days) > 0:
-            busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
-            last_28_days.sort(key=operator.itemgetter(0))
-
-            midnight = calendar.timegm(datetime.utcnow().date().timetuple())
-            messages_today = 0
-            if midnight in [tup[0] for tup in last_28_days]:
-                messages_today = dict(last_28_days)[midnight]
-
-            busiest_last_28 = f" (the busiest was {busiest[0]} with {busiest[1]} messages sent)"
-
-        else:
-            messages_today = 0
-            busiest_last_28 = ""
-
-        self.heimdall.reply(f"There have been {count} posts in &{room_requested} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}")
+            self.heimdall.reply(f"There have been {count} posts in &{room_requested} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}")
+        except:
+            logging.exception(f"Exception on roomstats with message {json.dumps(self.heimdall.packet.packet)}")
 
     def get_user_engagement_table(self, user):
         """(self, user) -> table"""
@@ -891,7 +902,10 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
             if len(comm) > 0 and len(comm[0]) > 0 and comm[0][0] == "!":
                 for func in self.prod_funcs:
-                    func(self)
+                    try:
+                        func(self)
+                    except:
+                        logging.error(f"Exception on message {json.dumps(self.heimdall.packet)}: ", exc_info=True)
 
                 if not self.prod_env:
                     for func in self.test_funcs:
@@ -967,7 +981,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         except KeyboardInterrupt:
             sys.exit(0)
         except KillError:
-            self.heimdall.log(logfile="Heimdall.log")
+            logging.info(exc_info=True)
             self.conn.commit()
             self.conn.close()
             self.heimdall.disconnect()
@@ -976,7 +990,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             self.conn.close()
             self.heimdall.disconnect()
         finally:
-            self.heimdall.log(logfile="Heimdall.log")
+            logging.exception(f"Heimdall crashed on message {json.dumps(self.heimdall.packet.packet)}")
             time.sleep(1)
 
 
