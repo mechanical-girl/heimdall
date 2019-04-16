@@ -31,14 +31,13 @@ import karelia
 import matplotlib
 import matplotlib.pyplot as plt
 
+import loki
 import pyimgur
 
 matplotlib.use('TkAgg')
 
 test_funcs = []
 prod_funcs = []
-
-logging.basicConfig(filename='Heimdall.log', filemode='a', format='\n\n\n--------------------\n%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
 
 def test(func):
     test_funcs.append(func)
@@ -81,13 +80,20 @@ class Heimdall:
             self.room = room[0]
             self.queue = room[1]
 
+        self.logger = logging.getLogger(__name__)
+        f_handler = logging.FileHandler('Heimdall.log')
+        f_format = logging.Formatter(f'\n\n\n--------------------\n%(asctime)s - &{self.room}: %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+        f_handler.setFormatter(f_format)
+        self.logger.addHandler(f_handler)
+
         self.stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else False
         self.force_new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
         self.test_funcs = test_funcs
         self.prod_funcs = prod_funcs
-        self.show(self.force_new_logs)
+        self.dcal = kwargs['disconnect_after_log'] if disconnect_after_log in kwargs else False
+        self.loki = loki.Loki()
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
@@ -97,6 +103,7 @@ class Heimdall:
             self.prod_env = False
 
         self.heimdall = karelia.bot('Heimdall', self.room)
+        self.heimdall.on_kill = sys.exit
 
         self.files = {
             'possible_rooms': 'data/heimdall/possible_rooms.json',
@@ -131,8 +138,8 @@ class Heimdall:
                 if os.path.basename(os.path.dirname(os.path.realpath(__file__))) != "prod-yggdrasil":
                     self.heimdall.stock_responses['long_help'] += "\nThis is a testing instance and may not be reliable."
                 self.show("done")
-            except Exception:
-                logging.exception("Error creating help text.")
+            except:
+                self.logger.exception("Error creating help text.")
                 self.show(f"Error creating help text - see 'Heimdall &{self.room}.log' for details.")
 
         with open(self.files['imgur'], 'r') as f:
@@ -141,8 +148,8 @@ class Heimdall:
                 self.imgur_key: str = json.loads(f.read())[0]
                 self.imgur_client = pyimgur.Imgur(self.imgur_key)
                 self.show("done")
-            except Exception:
-                logging.exception("Failed to create imgur client.")
+            except:
+                self.logger.exception("Failed to create imgur client.")
                 self.show(f"Error reading imgur key - see 'Heimdall &{self.room}.log' for details.")
 
         self.connect_to_database()
@@ -164,14 +171,11 @@ class Heimdall:
             self.total_messages_all_time = self.c.fetchone()[0]
         except:
             self.total_messages_all_time = 0
-            logging.info("Apparently no messages in the room.")
-
+            self.logger.warning("Apparently no messages in the room.")
 
         self.conn.close()
-
+        self.heimdall.disconnect()
         self.show("Ready")
-        if self.prod_env:
-            self.heimdall.disconnect()
 
     def write_to_database(self, statement, **kwargs):
         """Optionally, pass values=values, mode=mode."""
@@ -323,7 +327,6 @@ class Heimdall:
                     message['sender']['id'], message['sender']['name'],
                     self.heimdall.normalise_nick(message['sender']['name']),
                     message['time'], self.room, self.room + message['id'])
-
         self.write_to_database('''INSERT INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data)
 
     def next_day(self, day):
@@ -417,12 +420,12 @@ class Heimdall:
             try:
                 url = self.imgur_client.upload_image(filename).link
             except:
-                logging.exception("Imgur upload failed")
+                self.logger.exception("Imgur upload failed")
                 url = "Imgur upload failed, sorry."
-            os.remove(filename)
         else:
             url = "fake_url_here"
 
+        os.remove(filename)
         return url
 
     def get_aliases(self, user):
@@ -455,7 +458,7 @@ class Heimdall:
 
         if len(comm) > 1:
             options = self.parse_options(comm[1:])
-            if len(comm) == 2 and comm[1].startswith("@"):
+            if comm[1].startswith("@"):
                 user = self.heimdall.normalise_nick(comm[1][1:])
             elif options == [] or ('@' in [s[0] for s in comm] and not comm[1].startswith("@")):
                 self.heimdall.reply("Sorry, I didn't understand that. Syntax is !stats (options) or !stats @user (options)")
@@ -783,7 +786,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
             self.heimdall.reply(f"There have been {count} posts in &{room_requested} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}")
         except:
-            logging.exception(f"Exception on roomstats with message {json.dumps(self.heimdall.packet.packet)}")
+            self.logger.exception(f"Exception on roomstats with message {json.dumps(self.heimdall.packet.packet)}")
 
     def get_user_engagement_table(self, user):
         """(self, user) -> table"""
@@ -893,7 +896,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                     try:
                         func(self)
                     except:
-                        logging.error(f"Exception on message {json.dumps(self.heimdall.packet)}: ", exc_info=True)
+                        self.logger.error(f"Exception on message {json.dumps(self.heimdall.packet)}: ", exc_info=True)
 
                 if not self.prod_env:
                     for func in self.test_funcs:
@@ -904,43 +907,38 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                     self.heimdall.reply(f"test-funcs: {self.test_funcs}")
                     self.heimdall.reply(f"prod-env: {self.prod_env}")
 
-                elif comm[0] == "!alias":
+                elif comm[0] in ["!alias", "!unalias"]:
+                    sender = message.data.sender.name
                     while True:
                         msg = self.heimdall.parse()
                         if msg.type == 'send-event' and msg.data.sender.name == "TellBot" and 'bot:' in msg.data.sender.id and msg.data.content.split()[0] == "Aliases":
                             break
 
-                    if '\n' in msg.data.content:
-                        nicks = msg.data.content.split('\n')[1].split()[5:]
-                    else:
-                        nicks = [nick for nick in msg.data.content.split()[4:]]
+                    up_to_date_aliases = self.loki.parse(sender, msg)
+                    master = up_to_date_aliases[0]
 
-                    if nicks[-2] == "and":
-                        nicks.pop(len(nicks)-2)
-
-                    nicks = [nick[:-1] for nick in nicks[:-1]] + [nicks[-1]]
-
-                    if nicks[0] == "you":
-                        del nicks[0]
-                        nicks.append(message.data.sender.name)
-
-                    master_nick = None
-
-                    for nick in nicks:
-                        self.c.execute('''SELECT COUNT(*) FROM aliases WHERE master IS ?''', (nick, ))
-                        if self.c.fetchall()[0] != 0:
-                            master_nick = nick
-                            break
-
-                    if master_nick is None:
-                        master_nick = nicks[0]
-
-                    for nick in nicks:
+                    for alias in up_to_date_aliases:
+                        self.c.execute('''SELECT master FROM aliases WHERE normalias=?''', (self.heimdall.normalise_nick(alias),))
                         try:
-                            normnick = self.heimdall.normalise_nick(nick)
-                            self.write_to_database('''INSERT INTO aliases VALUES(?, ?, ?)''', values=(master_nick, nick, normnick))
-                        except sqlite3.IntegrityError:
-                            pass
+                            master = self.c.fetchone()[0]
+                            break
+                        except TypeError:
+                            continue
+
+                    stored_aliases = set(self.get_aliases(sender))
+                    correct_aliases = set(up_to_date_aliases)
+
+                    add_aliases = correct_aliases - stored_aliases
+                    remove_aliases = stored_aliases - correct_aliases
+
+
+                    values = []
+                    for alias in add_aliases:
+                        values.append([master, alias, self.heimdall.normalise_nick(alias)])
+                    self.write_to_database('''INSERT INTO aliases VALUES(?, ?, ?)''', values=values, mode='executemany') 
+
+                    for alias in remove_aliases:
+                        self.c.execute('''DELETE FROM aliases WHERE normalias=?''', (self.heimdall.normalise_nick(alias),))
 
                 elif comm[0] == "!master":
                     if len(comm) == 3 and comm[1].startswith('@') and comm[2].startswith('@'):
@@ -948,15 +946,18 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                         old_master = self.get_master_nick_of_user(user)
                         new_master = comm[2][1:]
                         aliases = self.get_aliases(old_master)
-                        if new_master in aliases:
+                        if self.heimdall.normalise_nick(new_master) in [self.heimdall.normalise_nick(alias) for alias in aliases]:
                             self.c.execute('DELETE FROM aliases WHERE master=?', (old_master,))
                             new_aliases = [(new_master, nick, self.heimdall.normalise_nick(nick),) for nick in aliases]
                             self.write_to_database('''INSERT INTO aliases VALUES(?, ?, ?)''', values=new_aliases, mode='executemany')
-                            self.heimdall.reply('Remastered @th\'s aliases to @totallyhuman')
+                            self.heimdall.reply(f'Remastered @{old_master} aliases to @{new_master}')
                         else:
                             self.heimdall.reply("New master not found in user's aliases")
                     else:
                         self.heimdall.reply("Syntax is !master @alias @newmaster")
+
+                elif comm[0] == "!err":
+                    self.heimdall.reply(1/0)
 
     def main(self):
         """Main loop"""
@@ -964,21 +965,28 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         try:
             self.heimdall.connect()
             self.connect_to_database()
+            if self.dcal: sys.exit(0)
             while True:
                 self.parse(self.get_message())
         except KeyboardInterrupt:
             sys.exit(0)
         except KillError:
-            logging.info(exc_info=True)
+            self.logger.exception("Heimdall was killed. Check karelia.log for more detail.")
             self.conn.commit()
             self.conn.close()
             self.heimdall.disconnect()
             raise KillError
+        except TimeoutError:
+            self.logger.exception("Timeout from Heim.")
+            try:
+                self.heimdall.disconnect()
+            except:
+                pass
         except:
+            self.logger.exception(f"Heimdall crashed on message {json.dumps(self.heimdall.packet.packet)}")
             self.conn.close()
             self.heimdall.disconnect()
         finally:
-            logging.exception(f"Heimdall crashed on message {json.dumps(self.heimdall.packet.packet)}")
             time.sleep(1)
 
 
@@ -1002,7 +1010,7 @@ def main(room, **kwargs):
         except KeyboardInterrupt:
             sys.exit(0)
         except KillError:
-            raise
+            sys.exit(0)
 
 
 if __name__ == '__main__':
@@ -1013,6 +1021,7 @@ if __name__ == '__main__':
     parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
     parser.add_argument("-p", "--force-prod", action="store_true", dest="force_prod")
     parser.add_argument("--use-logs", type=str, dest="use_logs")
+    parser.add_argument("--dcal", action="store_true", dest="disconnect_after_log") 
     args = parser.parse_args()
 
     room = args.room
@@ -1021,4 +1030,5 @@ if __name__ == '__main__':
     use_logs = args.use_logs
     verbose = args.verbose
     force_prod = args.force_prod
-    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod)
+    disconnect_after_log = args.disconnect_after_log
+    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod, disconnect_after_log=disconnect_after_log)
