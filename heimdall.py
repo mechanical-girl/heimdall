@@ -625,7 +625,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         # Collate and send the lot.
         self.heimdall.reply(f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
 
-    @prod
+    @test
     def run_queries(self):
         content = self.heimdall.packet.data.content
         if not content.split()[0] in ['!query', '!query-concat'] or self.room != "test":
