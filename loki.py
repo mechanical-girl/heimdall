@@ -3,7 +3,7 @@ import sqlite3
 
 
 class Loki:
-    def __init__(self, normalise, db, should_return):
+    def __init__(self, normalise, db, should_return, queue):
         self.normalise = normalise
         
         self.conn = sqlite3.connect(db)
