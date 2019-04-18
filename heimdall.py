@@ -10,6 +10,7 @@ known-problematic individuals.
 
 import argparse
 import calendar
+import multiprocessing as mp
 import codecs
 import json
 import logging
@@ -25,19 +26,18 @@ import time
 from datetime import date, datetime
 from datetime import time as dttime
 from datetime import timedelta
+from logging import DEBUG, FileHandler
 from typing import Dict, List, Tuple, Union
 
 import karelia
-import matplotlib
 import matplotlib.pyplot as plt
 
 import loki
 import pyimgur
 
-matplotlib.use('TkAgg')
-
 test_funcs = []
 prod_funcs = []
+
 
 def test(func):
     test_funcs.append(func)
@@ -48,6 +48,7 @@ def prod(func):
     prod_funcs.append(func)
     return func
     signal.signal(signal.SIGINT, on_sigint)
+
 
 class UpdateDone(Exception):
     """Exception meaning that logs are up to date"""
@@ -62,6 +63,15 @@ class UnknownMode(Exception):
 class KillError(Exception):
     """Exception for when the bot is killed."""
     pass
+
+class DebugFileHandler(FileHandler):
+    def __init__(self, filename, mode='a', encoding=None, delay=False):
+        FileHandler.__init__(self, filename, mode, encoding, delay)
+
+    def emit(self, record):
+        if not record.levelno == DEBUG:
+            return
+        FileHandler.emit(self, record)
 
 
 class Heimdall:
@@ -80,11 +90,21 @@ class Heimdall:
             self.room = room[0]
             self.queue = room[1]
 
+        log_format = logging.Formatter(f'\n\n--------------------\n%(asctime)s - &{self.room}: %(message)s', datefmt='%d-%b-%y %H:%M:%S')
         self.logger = logging.getLogger(__name__)
-        f_handler = logging.FileHandler('Heimdall.log')
-        f_format = logging.Formatter(f'\n\n\n--------------------\n%(asctime)s - &{self.room}: %(message)s', datefmt='%d-%b-%y %H:%M:%S')
-        f_handler.setFormatter(f_format)
-        self.logger.addHandler(f_handler)
+        self.logger.setLevel(logging.DEBUG)
+
+        debug_handler = DebugFileHandler('Heimdall_debug.log')
+        debug_handler.setFormatter(log_format)
+        debug_handler.setLevel(logging.DEBUG)
+        self.logger.addHandler(debug_handler)
+
+        exc_handler = logging.FileHandler('Heimdall.log')
+        exc_handler.setFormatter(log_format)
+        exc_handler.setLevel(logging.WARN)
+        self.logger.addHandler(exc_handler)
+
+        self.logger.debug('Logging configured successfully')
 
         self.stealth = kwargs['stealth'] if 'stealth' in kwargs else False
         self.verbose = kwargs['verbose'] if 'verbose' in kwargs else False
@@ -93,7 +113,8 @@ class Heimdall:
         self.test_funcs = test_funcs
         self.prod_funcs = prod_funcs
         self.dcal = kwargs['disconnect_after_log'] if disconnect_after_log in kwargs else False
-        self.loki = loki.Loki()
+
+        self.logger.debug('Flags handled successfully')
 
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.database = os.path.join(BASE_DIR, "_heimdall.db")
@@ -102,8 +123,15 @@ class Heimdall:
         else:
             self.prod_env = False
 
+        self.logger.debug(f'Running in {"production" if self.prod_env else "test"} environment')
+
         self.heimdall = karelia.bot('Heimdall', self.room)
         self.heimdall.on_kill = sys.exit
+
+        if self.prod_env:
+            self.loki = loki.Loki(self.heimdall.normalise_nick, self.database, False, self.queue)
+        else:
+            self.loki = loki.Loki(self.heimdall.normalise_nick, self.database, True)
 
         self.files = {
             'possible_rooms': 'data/heimdall/possible_rooms.json',
@@ -152,8 +180,8 @@ class Heimdall:
                 self.logger.exception("Failed to create imgur client.")
                 self.show(f"Error reading imgur key - see 'Heimdall &{self.room}.log' for details.")
 
-        self.connect_to_database()
         self.show("Connecting to database...", end=' ')
+        self.connect_to_database()
         if self.force_new_logs:
             self.show("done\nDeleting messages...", end=' ')
             self.write_to_database('''DELETE FROM messages WHERE room IS ?''', values=(self.room, ))
@@ -211,6 +239,7 @@ class Heimdall:
         end = kwargs['end'] if 'end' in kwargs else '\n'
         if self.verbose or override:
             print(*args, end=end)
+        self.logger.debug(*args)
 
     def check_or_create_tables(self):
         """
@@ -453,6 +482,7 @@ class Heimdall:
         if comm[0] != "!stats":
             return
 
+        self.logger.debug(f'Got a stats request from "{self.heimdall.packet.data.sender.name}"')
         options = []
         user = self.heimdall.packet.data.sender.name
 
@@ -470,15 +500,18 @@ class Heimdall:
         normnick = self.heimdall.normalise_nick(user)
 
         if 'aliases' in options:
-            aliases = [self.heimdall.normalise_nick(nick) for nick in self.get_aliases(user)]
+            aliases = [self.heimdall.normalise_nick(nick) for nick in self.loki.get_aliases(user)]
 
             if not aliases:
+                self.logger.debug('Aliases requested and ignored')
                 aliases_used = f"--aliases was ignored, since no aliases for user {user} are known. To correct, please post `!alias @{user.replace(' ','')}` in any room where @Heimdall is present."
                 aliases = [normnick]
             else:
+                self.logger.debug('Using aliases')
                 aliases_used = f"{len(aliases)-1} aliases used."
 
         else:
+            self.logger.debug('Aliases not requested')
             aliases_used = "No aliases used."
             aliases = [normnick]
 
@@ -623,6 +656,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             text_results = ""
 
         # Collate and send the lot.
+        self.logger.debug('Sending results')
         self.heimdall.reply(f"""{message_results}{engagement_results}{text_results}{aliases_used}""")
 
     @test
@@ -708,11 +742,13 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             if comm[0] != "!roomstats":
                 return
 
+            self.debug(f"Got a roomstats request from {self.heimdall.packet.data.sender.name}")
             if len(comm) == 2 and comm[1].startswith('&'):
                 self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (comm[1][1:], ))
                 count = self.c.fetchone()[0]
                 if count == 0:
                     self.heimdall.reply("I do not operate in that room.")
+                    self.logger.debug("Requested a room not logged")
                     return
                 else:
                     room_requested = comm[1][1:]
@@ -784,6 +820,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                 messages_today = 0
                 busiest_last_28 = ""
 
+            self.logger.debug("Request finished, sending now.")
             self.heimdall.reply(f"There have been {count} posts in &{room_requested} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}")
         except:
             self.logger.exception(f"Exception on roomstats with message {json.dumps(self.heimdall.packet.packet)}")
@@ -797,7 +834,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
 
         normnick = self.heimdall.normalise_nick(user)
 
-        aliases = [self.heimdall.normalise_nick(nick) for nick in self.get_aliases(user)]
+        aliases = [self.heimdall.normalise_nick(nick) for nick in self.loki.get_aliases(user)]
         if not aliases:
             aliases = [normnick]
 
@@ -889,14 +926,24 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             if message.type == 'send-reply' or len(message.data.content.split()) == 0:
                 return
 
+            queries = self.loki.parse(message, self.room)
+            if queries is not None:
+                for query in queries:
+                    try:
+                        self.logger.debug(f"Running query {query[0]} with values {query[1]}")
+                        self.write_to_database(query[0], values=query[1], mode="execute")
+                    except sqlite3.IntegrityError:
+                        pass
+
             comm = message.data.content.split()
 
             if len(comm) > 0 and len(comm[0]) > 0 and comm[0][0] == "!":
+                self.logger.debug(f'Received message "{message.data.content}" from user "{message.data.sender.name}".')
                 for func in self.prod_funcs:
                     try:
                         func(self)
                     except:
-                        self.logger.error(f"Exception on message {json.dumps(self.heimdall.packet)}: ", exc_info=True)
+                        self.logger.exception(f"Exception on message {json.dumps(self.heimdall.packet.packet)}")
 
                 if not self.prod_env:
                     for func in self.test_funcs:
@@ -907,45 +954,13 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                     self.heimdall.reply(f"test-funcs: {self.test_funcs}")
                     self.heimdall.reply(f"prod-env: {self.prod_env}")
 
-                elif comm[0] in ["!alias", "!unalias"]:
-                    sender = message.data.sender.name
-                    while True:
-                        msg = self.heimdall.parse()
-                        if msg.type == 'send-event' and msg.data.sender.name == "TellBot" and 'bot:' in msg.data.sender.id and msg.data.content.split()[0] == "Aliases":
-                            break
-
-                    up_to_date_aliases = self.loki.parse(sender, msg)
-                    master = up_to_date_aliases[0]
-
-                    for alias in up_to_date_aliases:
-                        self.c.execute('''SELECT master FROM aliases WHERE normalias=?''', (self.heimdall.normalise_nick(alias),))
-                        try:
-                            master = self.c.fetchone()[0]
-                            break
-                        except TypeError:
-                            continue
-
-                    stored_aliases = set(self.get_aliases(sender))
-                    correct_aliases = set(up_to_date_aliases)
-
-                    add_aliases = correct_aliases - stored_aliases
-                    remove_aliases = stored_aliases - correct_aliases
-
-
-                    values = []
-                    for alias in add_aliases:
-                        values.append([master, alias, self.heimdall.normalise_nick(alias)])
-                    self.write_to_database('''INSERT INTO aliases VALUES(?, ?, ?)''', values=values, mode='executemany') 
-
-                    for alias in remove_aliases:
-                        self.c.execute('''DELETE FROM aliases WHERE normalias=?''', (self.heimdall.normalise_nick(alias),))
-
                 elif comm[0] == "!master":
+                    self.logger.debug("Master command received")
                     if len(comm) == 3 and comm[1].startswith('@') and comm[2].startswith('@'):
                         user = comm[1][1:]
                         old_master = self.get_master_nick_of_user(user)
                         new_master = comm[2][1:]
-                        aliases = self.get_aliases(old_master)
+                        aliases = self.loki.get_aliases(old_master)
                         if self.heimdall.normalise_nick(new_master) in [self.heimdall.normalise_nick(alias) for alias in aliases]:
                             self.c.execute('DELETE FROM aliases WHERE master=?', (old_master,))
                             new_aliases = [(new_master, nick, self.heimdall.normalise_nick(nick),) for nick in aliases]
@@ -962,32 +977,11 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
     def main(self):
         """Main loop"""
 
-        try:
-            self.heimdall.connect()
-            self.connect_to_database()
-            if self.dcal: sys.exit(0)
-            while True:
-                self.parse(self.get_message())
-        except KeyboardInterrupt:
-            sys.exit(0)
-        except KillError:
-            self.logger.exception("Heimdall was killed. Check karelia.log for more detail.")
-            self.conn.commit()
-            self.conn.close()
-            self.heimdall.disconnect()
-            raise KillError
-        except TimeoutError:
-            self.logger.exception("Timeout from Heim.")
-            try:
-                self.heimdall.disconnect()
-            except:
-                pass
-        except:
-            self.logger.exception(f"Heimdall crashed on message {json.dumps(self.heimdall.packet.packet)}")
-            self.conn.close()
-            self.heimdall.disconnect()
-        finally:
-            time.sleep(1)
+        self.heimdall.connect()
+        self.connect_to_database()
+        if self.dcal: sys.exit(0)
+        while True:
+            self.parse(self.get_message())
 
 
 def on_sigint(signum, frame):
@@ -995,22 +989,34 @@ def on_sigint(signum, frame):
 
 
 def main(room, **kwargs):
+    stealth = kwargs['stealth'] if 'stealth' in kwargs else False
+    new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
+    use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(room) is str else room[0]
+    verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
+    force_prod = kwargs['force_prod'] if 'force_prod' in kwargs else 'False'
+
+    heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod)
 
     while True:
-        stealth = kwargs['stealth'] if 'stealth' in kwargs else False
-        new_logs = kwargs['new_logs'] if 'new_logs' in kwargs else False
-        use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(room) is str else room[0]
-        verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
-        force_prod = kwargs['force_prod'] if 'force_prod' in kwargs else 'False'
-
-        heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod)
-
         try:
             heimdall.main()
         except KeyboardInterrupt:
             sys.exit(0)
         except KillError:
-            sys.exit(0)
+            heimdall.logger.exception("Heimdall was killed. Check karelia.log for more detail.")
+            heimdall.conn.commit()
+            heimdall.conn.close()
+            heimdall.heimdall.disconnect()
+            raise
+        except TimeoutError:
+            heimdall.logger.exception("Timeout from Heim.")
+            heimdall.heimdall.disconnect()
+        except:
+            heimdall.logger.exception(f"Heimdall crashed on message {json.dumps(heimdall.heimdall.packet.packet)}")
+            heimdall.conn.close()
+        finally:
+            heimdall.heimdall.disconnect()
+            time.sleep(1)
 
 
 if __name__ == '__main__':
@@ -1021,7 +1027,7 @@ if __name__ == '__main__':
     parser.add_argument("--force-new-logs", help="If enabled, Heimdall will delete any current logs for the room", action="store_true", dest="new_logs")
     parser.add_argument("-p", "--force-prod", action="store_true", dest="force_prod")
     parser.add_argument("--use-logs", type=str, dest="use_logs")
-    parser.add_argument("--dcal", action="store_true", dest="disconnect_after_log") 
+    parser.add_argument("--dcal", action="store_true", dest="disconnect_after_log")
     args = parser.parse_args()
 
     room = args.room
