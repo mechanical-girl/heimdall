@@ -90,7 +90,7 @@ class Heimdall:
             self.room = room[0]
             self.queue = room[1]
 
-        log_format = logging.Formatter(f'\n\n--------------------\n%(asctime)s - &{self.room}: %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+        log_format = logging.Formatter(f'\n\n--------------------\n%(asctime)s - &{self.room}: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG)
 
@@ -112,7 +112,7 @@ class Heimdall:
         self.use_logs = kwargs['use_logs'] if 'use_logs' in kwargs else self.room
         self.test_funcs = test_funcs
         self.prod_funcs = prod_funcs
-        self.dcal = kwargs['disconnect_after_log'] if disconnect_after_log in kwargs else False
+        self.dcal = kwargs['disconnect_after_log'] if 'disconnect_after_log' in kwargs else False
 
         self.logger.debug('Flags handled successfully')
 
@@ -738,11 +738,12 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         """Gets and sends stats for rooms"""
         try:
             comm = self.heimdall.packet.data.content.split()
+            print(comm)
 
             if comm[0] != "!roomstats":
                 return
 
-            self.debug(f"Got a roomstats request from {self.heimdall.packet.data.sender.name}")
+            self.logger.debug(f"Got a roomstats request from {self.heimdall.packet.data.sender.name}")
             if len(comm) == 2 and comm[1].startswith('&'):
                 self.c.execute('''SELECT COUNT(*) FROM messages WHERE room IS ?''', (comm[1][1:], ))
                 count = self.c.fetchone()[0]

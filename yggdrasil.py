@@ -1,8 +1,10 @@
 import argparse
+import logging
 import importlib
 import json
 import multiprocessing as mp
 import os
+import hermothr
 import subprocess
 import sys
 import time
@@ -42,31 +44,72 @@ class Yggdrasil:
 
         self.queue = mp.Queue()
 
-        self.instances = []
-        instance = mp.Process(target=self.run_forseti)
-        instance.daemon = True
-        instance.name = "forseti"
-        self.instances.append(instance)
+        log_format = logging.Formatter(f'\n\n--------------------\n%(asctime)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        self.logger = logging.getLogger(__name__)
+        handler = logging.FileHandler('Yggdrasil.log')
+        handler.setFormatter(log_format)
+        self.logger.addHandler(handler)
+
+        self.logger.warning('Yggdrasil yawns and stretches, its roots stretching over the whole of the nine realms.')
+
+        try:
+
+            self.instances = []
+            instance = mp.Process(target=self.run_forseti)
+            instance.daemon = True
+            instance.name = "forseti"
+            self.instances.append(instance)
+        except:
+            self.logger.exception("Error initialising forseti.")
 
         for room in self.rooms:
-            instance = mp.Process(target=self.run_heimdall, args=(room, self.stealth, self.new_logs, self.use_logs, self.verbose, self.queue))
-            instance.daemon = True
-            instance.name = room
-            self.instances.append(instance)
+            try:
+                instance = mp.Process(target=self.run_heimdall, args=(room, self.stealth, self.new_logs, self.use_logs, self.verbose, self.queue))
+                instance.daemon = True
+                instance.name = room
+                self.instances.append(instance)
+            except:
+                self.logger.exception(f"Error initialising heimdall in {room}")
 
-    def run_heimdall(self, room, stealth, new_logs, use_logs, verbose, queue):
-        if room == "test":
-            heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs="xkcd", verbose=verbose)
-        else:
-            heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
+            try:
+
+                instance = mp.Process(target=self.run_hermothr, args=())
+                instance.daemon = True
+                instance.name = f"hermothr_{room}"
+                self.instances.append(instance)
+            except:
+                self.logger.exception(f"Error initialising hermothr in {room}")
+
 
     def run_forseti(self):
-        forseti.main(self.queue)
+        try:
+            forseti.main(self.queue)
+        except:
+            self.logger.exception(f"Error initialising forseti")
+
+
+    def run_heimdall(self, room, stealth, new_logs, use_logs, verbose, queue):
+        try:
+            if room == "test":
+                heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs="xkcd", verbose=verbose)
+            else:
+                heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose)
+        except:
+            self.logger.exception(f"Error initialising heimdall in {room}")
+
+    def run_hermothr(self):
+        try:
+            #hermothr.main(self.queue)
+            pass
+        except:
+            self.logger.exception(f"Error initialising hermothr")
 
     def on_sigint(self, signum, frame):
         """Gracefully handle sigints"""
         try:
             self.terminate()
+        except:
+            self.logger.traceback('Failed to exit on sigint')
         finally:
             sys.exit(0)
 
@@ -132,7 +175,7 @@ def main():
 
     except Exception:
         yggdrasil.disconnect()
-        yggdrasil.log()
+        ygg.logger.traceback(f'Crashed on message f{json.dumps(yggdrasil.packet.packet)}')
         ygg.stop()
 
     finally:
