@@ -738,7 +738,6 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
         """Gets and sends stats for rooms"""
         try:
             comm = self.heimdall.packet.data.content.split()
-            print(comm)
 
             if comm[0] != "!roomstats":
                 return
