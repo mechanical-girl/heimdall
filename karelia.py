@@ -229,7 +229,6 @@ class bot:
             if self.packet.type == "ping-event":
                 self.conn.send(json.dumps({'type': 'ping-reply',
                                            'data': {'time': packet.data.time}}))
-                self.logger.warning(f'Replied to a ping-event from {packet.data.time} at {time.time()}, {time.time()-packet.data.time} seconds later.')
 
             elif self.packet.type == "send-event":
 
