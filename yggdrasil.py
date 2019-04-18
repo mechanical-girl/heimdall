@@ -175,7 +175,7 @@ def main():
 
     except Exception:
         yggdrasil.disconnect()
-        ygg.logger.traceback(f'Crashed on message f{json.dumps(yggdrasil.packet.packet)}')
+        ygg.logger.exception(f'Crashed on message f{json.dumps(yggdrasil.packet.packet)}')
         ygg.stop()
 
     finally:
