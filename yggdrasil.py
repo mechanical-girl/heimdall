@@ -172,13 +172,13 @@ def main():
                         main()
                     else:
                         yggdrasil.send('Deploy failed - sorry.', message.data.id)
-
+    except TimeoutError:
+        ygg.logger.exception("Timeout from Heim.")
     except Exception:
-        yggdrasil.disconnect()
         ygg.logger.exception(f'Crashed on message f{json.dumps(yggdrasil.packet.packet)}')
-        ygg.stop()
-
     finally:
+        ygg.stop()
+        yggdrasil.disconnect()
         time.sleep(1)
 
 
