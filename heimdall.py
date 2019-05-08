@@ -10,10 +10,10 @@ known-problematic individuals.
 
 import argparse
 import calendar
-import multiprocessing as mp
 import codecs
 import json
 import logging
+import multiprocessing as mp
 import operator
 import os
 import random
@@ -31,6 +31,7 @@ from typing import Dict, List, Tuple, Union
 
 import karelia
 import matplotlib.pyplot as plt
+from websocket._exceptions import WebSocketConnectionClosedException
 
 import loki
 import pyimgur
