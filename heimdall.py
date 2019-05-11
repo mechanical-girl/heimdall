@@ -773,6 +773,9 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             total_posters = self.c.fetchall()[0][0]
 
             # Get activity over the last 28 days
+            self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (room_requested, ))
+            messages_by_day = self.c.fetchall()
+
             lower_bound = self.next_day(time.time()) - (60 * 60 * 24 * 28)
             self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? AND time > ? GROUP BY CAST(time / 86400 AS INT)''', (room_requested, lower_bound,))
             last_28_days = self.c.fetchall()
@@ -785,8 +788,14 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             per_day_last_four_weeks = int(sum([count[1] for count in last_28_days]) / 28)
             last_28_days.sort(key=operator.itemgetter(1))
 
-            self.c.execute('''SELECT time, COUNT(*) FROM messages WHERE room IS ? GROUP BY CAST(time/86400 AS INT)''', (room_requested, ))
-            messages_by_day = self.c.fetchall()
+            title = "[Legacy] Messages in &{}, last 28 days".format(room_requested)
+            data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
+            data_y = [day[1] for day in last_28_days]
+            last_28_graph = self.graph_data(data_x, data_y, title)
+            last_28_file = self.save_graph(last_28_graph)
+            legacy_last_28_url = self.upload_and_delete_graph(last_28_file)
+
+            last_28_days.sort(key=operator.itemgetter(0))
 
             title = "Messages in &{}, last 28 days".format(room_requested)
             data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
@@ -801,6 +810,8 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             all_time_graph = self.graph_data(data_x, data_y, title)
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
+
+
 
             if last_28_days is None:
                 self.heimdall.reply(f"There have been {count} posts in &{room_requested}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}")
@@ -822,7 +833,7 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
                 busiest_last_28 = ""
 
             self.logger.debug("Request finished, sending now.")
-            self.heimdall.reply(f"There have been {count} posts in &{room_requested} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url}")
+            self.heimdall.reply(f"There have been {count} posts in &{room_requested} ({messages_today} today) from {total_posters} posters, averaging {per_day_last_four_weeks} posts per day over the last 28 days{busiest_last_28}.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url} {last_28_url} {legacy_last_28_url}")
         except:
             self.logger.exception(f"Exception on roomstats with message {json.dumps(self.heimdall.packet.packet)}")
 
