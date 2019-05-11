@@ -789,8 +789,8 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             messages_by_day = self.c.fetchall()
 
             title = "Messages in &{}, last 28 days".format(room_requested)
-            data_y = [date.fromtimestamp(int(day[0])) for day in last_28_days]
-            data_x = [day[1] for day in last_28_days]
+            data_x = [date.fromtimestamp(int(day[0])) for day in last_28_days]
+            data_y = [day[1] for day in last_28_days]
             last_28_graph = self.graph_data(data_x, data_y, title)
             last_28_file = self.save_graph(last_28_graph)
             last_28_url = self.upload_and_delete_graph(last_28_file)
