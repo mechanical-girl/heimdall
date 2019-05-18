@@ -811,14 +811,12 @@ Ranking:\t\t\t\t\t{position} of {no_of_posters}.
             all_time_file = self.save_graph(all_time_graph)
             all_time_url = self.upload_and_delete_graph(all_time_file)
 
-
-
             if last_28_days is None:
                 self.heimdall.reply(f"There have been {count} posts in &{room_requested}, though none in the last 28 days.\n\nThe top ten posters are:\n{top_ten}\n{all_time_url}")
                 return
 
             if len(last_28_days) > 0:
-                busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[-1][1])
+                busiest = (datetime.utcfromtimestamp(last_28_days[-1][0]).strftime("%Y-%m-%d"), last_28_days[0][1])
                 last_28_days.sort(key=operator.itemgetter(0))
 
                 midnight = calendar.timegm(datetime.utcnow().date().timetuple())
