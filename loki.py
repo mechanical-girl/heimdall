@@ -3,9 +3,8 @@ import sqlite3
 
 
 class Loki:
-    def __init__(self, normalise, db, should_return, queue):
+    def __init__(self, normalise, db, should_return, queue=None):
         self.normalise = normalise
-        
         self.conn = sqlite3.connect(db)
         self.c = self.conn.cursor()
 
@@ -31,7 +30,6 @@ class Loki:
                 pass
 
             up_to_date_aliases = [alias.replace('you',sender).replace(',','') for alias in aliases]
-    
             master = up_to_date_aliases[0]
 
             for alias in up_to_date_aliases:
