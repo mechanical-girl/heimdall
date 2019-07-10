@@ -114,6 +114,7 @@ class Heimdall:
         self.test_funcs = test_funcs
         self.prod_funcs = prod_funcs
         self.dcal = kwargs['disconnect_after_log'] if 'disconnect_after_log' in kwargs else False
+        self.fill_in = kwargs['fill_in'] if 'fill_in' in kwargs else False
 
         self.logger.debug('Flags handled successfully')
 
@@ -278,6 +279,7 @@ class Heimdall:
 
         # Query gets the most recent message sent so that we have something to compare to. If Heimdall is running in stand-alone mode, the sqlite3.IntegrityError that gets raised to signal that the logs are up to date will be received, but if it is writing to the database via Forseti, it has no way to receive that exception, so we have to check manually for that usecase.
         update_done = False
+        bulk_insert = f'''INSERT OR {'ignore' if self.fill_in else 'FAIL'} INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)'''
 
         while True:
             try:
@@ -320,10 +322,10 @@ class Heimdall:
                     # break out of the loop and we will assume that the logs are now
                     # up to date.
                     self.c.execute('''SELECT COUNT(*) FROM messages WHERE globalid=?''', (data[0][8],))
-                    if self.c.fetchone()[0] == 1:
+                    if self.c.fetchone()[0] == 1 and not self.fill_in:
                         self.show("Log update done; most recent message in ther DB has been reached.")
                         raise UpdateDone
-                    self.write_to_database('''INSERT OR FAIL INTO messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''', values=data, mode="executemany")
+                    self.write_to_database(bulk_insert, values=data, mode="executemany")
 
                     if update_done:
                         raise UpdateDone
@@ -1004,8 +1006,9 @@ def main(room, **kwargs):
     use_logs = kwargs['use_logs'] if 'use_logs' in kwargs and kwargs['use_logs'] is not None else room if type(room) is str else room[0]
     verbose = kwargs['verbose'] if 'verbose' in kwargs else 'False'
     force_prod = kwargs['force_prod'] if 'force_prod' in kwargs else 'False'
+    fill_in = kwargs['fill_in'] if 'fill_in' in kwargs else 'False'
 
-    heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod)
+    heimdall = Heimdall(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod, fill_in=fill_in)
 
     while True:
         try:
@@ -1038,6 +1041,7 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--force-prod", action="store_true", dest="force_prod")
     parser.add_argument("--use-logs", type=str, dest="use_logs")
     parser.add_argument("--dcal", action="store_true", dest="disconnect_after_log")
+    parser.add_argument("--fill-in", "-f", action="store_true", dest="fill_in")
     args = parser.parse_args()
 
     room = args.room
@@ -1047,4 +1051,5 @@ if __name__ == '__main__':
     verbose = args.verbose
     force_prod = args.force_prod
     disconnect_after_log = args.disconnect_after_log
-    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod, disconnect_after_log=disconnect_after_log)
+    fill_in = args.fill_in
+    main(room, stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, force_prod=force_prod, disconnect_after_log=disconnect_after_log, fill_in=fill_in)
