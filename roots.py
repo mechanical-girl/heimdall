@@ -12,6 +12,6 @@ if pid != '':
     pid = pid.split()[0]
     sys.exit(0)
 with open(os.devnull, 'w') as f:
-    proc = subprocess.Popen(['pipenv', 'run', 'python', 'yggdrasil.py', '-f'])
+    proc = subprocess.Popen(['pipenv', 'run', 'python', 'yggdrasil.py'])
 with open("roots.json", "w") as f:
     f.write(json.dumps(proc.pid))
