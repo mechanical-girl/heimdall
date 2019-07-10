@@ -94,9 +94,9 @@ class Yggdrasil:
     def run_heimdall(self, room, stealth, new_logs, use_logs, verbose, fill_in, queue):
         try:
             if room == "test":
-                heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs="xkcd", verbose=verbose, fill_in)
+                heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs="xkcd", verbose=verbose, fill_in=fill_in)
             else:
-                heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, fill_in)
+                heimdall.main((room, queue), stealth=stealth, new_logs=new_logs, use_logs=use_logs, verbose=verbose, fill_in=fill_in)
         except:
             self.logger.exception(f"Error initialising heimdall in {room}")
 
